@@ -45,39 +45,39 @@ export const calculatePasswordStrength = (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  // Pure dynamic authentication - no default account
-  const [user, setUser] = useState(() => {
+  // Wipe any legacy demo account from previous sessions on startup
+  useEffect(() => {
     try {
-      const saved = localStorage.getItem('linkup_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
+      localStorage.removeItem('linkup_auth_user');
+      const registered = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      const cleaned = registered.filter(
+        (u) =>
+          u.username !== 'ashok.lingaraddi' &&
+          u.email !== 'ashok.lingaraddi@linkup.dev' &&
+          u.email !== 'ashok.lingaraddi@gmail.com'
+      );
+      localStorage.setItem('linkup_registered_users', JSON.stringify(cleaned));
+    } catch (err) {
+      console.warn('Storage cleanup error:', err);
     }
-  });
+  }, []);
 
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('linkup_auth_user');
-  });
+  // Every time the user opens the site, session starts as logged out (null)
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [googleAuthModalOpen, setGoogleAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('signup'); // Default to 'signup'
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('linkup_auth_user', JSON.stringify(user));
-      setIsAuthenticated(true);
-    } else {
-      localStorage.removeItem('linkup_auth_user');
-      setIsAuthenticated(false);
-    }
-  }, [user]);
+  const [authMode, setAuthMode] = useState('login'); // Default to login prompt on site open
 
   // Strict Login: checks registered database
   const login = (identifier, password) => {
     const cleanIdentifier = (identifier || '').trim();
     if (!cleanIdentifier) {
       throw new Error('Please enter your email or username');
+    }
+    if (!password) {
+      throw new Error('Please enter your password');
     }
 
     // Check registered accounts in localStorage
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('No account found with this email/username. Please create an account first.');
     }
 
-    if (foundUser.password && password && foundUser.password !== password) {
+    if (foundUser.password && foundUser.password !== password) {
       throw new Error('Incorrect password. Please try again.');
     }
 
@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }) => {
     return foundUser;
   };
 
-  // Sign Up: creates and saves new user profile
+  // Sign Up: creates and saves new individual user profile
   const signup = ({ name, username, email, password, dob, gender, avatar }) => {
     const cleanName = (name || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Password must be at least 6 characters');
     }
 
-    // Check if email or username already registered
+    // Check if email or username is already registered
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
     const existing = savedDb.find(
       (u) =>

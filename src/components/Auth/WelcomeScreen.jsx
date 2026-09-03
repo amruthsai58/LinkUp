@@ -21,8 +21,8 @@ export const WelcomeScreen = () => {
   const { setActiveTab } = useSocial();
   const { signup, login, loginWithGoogle, setGoogleAuthModalOpen } = useAuth();
 
-  // Mode: 'signup' | 'login'
-  const [mode, setMode] = useState('signup');
+  // Mode: 'login' | 'signup'
+  const [mode, setMode] = useState('login');
 
   // Sign Up Form States
   const [name, setName] = useState('');

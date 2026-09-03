@@ -134,6 +134,28 @@ class RealtimeService {
       } catch {}
     }
 
+    // 3. Persist incoming friend requests into cloud cache
+    if (type === 'NEW_FRIEND_REQUEST' && payload && payload.recipientUsername) {
+      try {
+        const reqs = JSON.parse(localStorage.getItem('linkup_cloud_friend_requests') || '[]');
+        if (!reqs.some((r) => r.id === payload.id || (r.senderUsername === payload.senderUsername && r.recipientUsername === payload.recipientUsername && r.timestamp === payload.timestamp))) {
+          reqs.unshift(payload);
+          localStorage.setItem('linkup_cloud_friend_requests', JSON.stringify(reqs));
+        }
+      } catch {}
+    }
+
+    // 4. Persist incoming messages into cloud cache
+    if (type === 'NEW_DIRECT_MESSAGE' && payload && payload.recipientUsername) {
+      try {
+        const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+        if (!msgs.some((m) => m.id === payload.id || (m.timestamp === payload.timestamp && m.senderUsername === payload.senderUsername))) {
+          msgs.unshift(payload);
+          localStorage.setItem('linkup_cloud_messages', JSON.stringify(msgs));
+        }
+      } catch {}
+    }
+
     if (triggerEmit) {
       this.emit(type, payload);
     }

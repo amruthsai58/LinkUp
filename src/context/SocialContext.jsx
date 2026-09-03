@@ -381,6 +381,147 @@ export const SocialProvider = ({ children }) => {
     };
   }, [user, activeLiveStreamToWatch]);
 
+  // Sync past and incoming friend requests and direct messages from the cloud relay
+  useEffect(() => {
+    const syncCloudData = () => {
+      if (!user) return;
+
+      // 1. Sync friend requests
+      try {
+        const reqs = JSON.parse(localStorage.getItem('linkup_cloud_friend_requests') || '[]');
+        reqs.forEach((payload) => {
+          const isForMe =
+            (payload.recipientId && user.id && payload.recipientId === user.id) ||
+            (payload.recipientUsername && user.username && payload.recipientUsername.toLowerCase() === user.username.toLowerCase()) ||
+            (payload.recipientLinkUpId && user.linkupId && payload.recipientLinkUpId.toLowerCase() === user.linkupId.toLowerCase());
+
+          if (isForMe) {
+            const newNotif = {
+              id: payload.id || `notif-req-${Date.now()}`,
+              type: 'friend_request',
+              section: 'New',
+              user: {
+                id: payload.senderId,
+                name: payload.senderName,
+                username: payload.senderUsername,
+                avatar: payload.senderAvatar,
+                linkupId: payload.senderLinkUpId,
+              },
+              action: 'sent you a friend request.',
+              time: payload.timestamp ? new Date(payload.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+              read: false,
+              hasActions: true,
+            };
+
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === newNotif.id || (n.user?.username && n.user.username.toLowerCase() === payload.senderUsername.toLowerCase()))) {
+                return prev;
+              }
+              return [newNotif, ...prev];
+            });
+
+            setFriends((prev) => {
+              const exists = prev.some(
+                (f) =>
+                  (f.id && f.id === payload.senderId) ||
+                  (f.username && payload.senderUsername && f.username.toLowerCase() === payload.senderUsername.toLowerCase())
+              );
+              if (exists) {
+                return prev.map((f) =>
+                  (f.id && f.id === payload.senderId) ||
+                  (f.username && payload.senderUsername && f.username.toLowerCase() === payload.senderUsername.toLowerCase())
+                    ? { ...f, hasPendingRequest: true }
+                    : f
+                );
+              }
+              return [
+                {
+                  id: payload.senderId,
+                  linkupId: payload.senderLinkUpId,
+                  name: payload.senderName,
+                  username: payload.senderUsername,
+                  avatar: payload.senderAvatar,
+                  mutualFriends: 1,
+                  status: 'online',
+                  isFriend: false,
+                  isFollowing: false,
+                  hasPendingRequest: true,
+                  hometown: 'LinkUp Network',
+                },
+                ...prev,
+              ];
+            });
+          }
+        });
+      } catch (e) {}
+
+      // 2. Sync direct messages
+      try {
+        const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+        msgs.forEach((payload) => {
+          const isForMe =
+            (payload.recipientId && user.id && payload.recipientId === user.id) ||
+            (payload.recipientUsername && user.username && payload.recipientUsername.toLowerCase() === user.username.toLowerCase()) ||
+            (payload.recipientLinkUpId && user.linkupId && payload.recipientLinkUpId.toLowerCase() === user.linkupId.toLowerCase());
+
+          if (isForMe) {
+            const incomingMsg = {
+              id: payload.id || `m-${Date.now()}`,
+              senderId: payload.senderId,
+              text: payload.text,
+              time: payload.time || 'Just now',
+            };
+
+            setConversations((prev) => {
+              const exists = prev.some(
+                (c) =>
+                  c.friend?.id === payload.senderId ||
+                  (c.friend?.username && payload.senderUsername && c.friend.username.toLowerCase() === payload.senderUsername.toLowerCase())
+              );
+              if (exists) {
+                return prev.map((c) => {
+                  if (
+                    c.friend?.id === payload.senderId ||
+                    (c.friend?.username && payload.senderUsername && c.friend.username.toLowerCase() === payload.senderUsername.toLowerCase())
+                  ) {
+                    if (c.messages.some((m) => m.id === incomingMsg.id)) return c;
+                    return {
+                      ...c,
+                      lastMessage: payload.text,
+                      time: 'Just now',
+                      messages: [...c.messages, incomingMsg],
+                    };
+                  }
+                  return c;
+                });
+              } else {
+                const newConv = {
+                  id: `conv-${Date.now()}`,
+                  friend: {
+                    id: payload.senderId,
+                    name: payload.senderName || 'LinkUp Member',
+                    username: payload.senderUsername || 'user',
+                    avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+                    linkupId: payload.senderLinkUpId,
+                  },
+                  lastMessage: payload.text,
+                  time: 'Just now',
+                  unread: true,
+                  messages: [incomingMsg],
+                };
+                return [newConv, ...prev];
+              }
+            });
+          }
+        });
+      } catch (e) {}
+    };
+
+    syncCloudData();
+    const unsubSynced = realtime.subscribe('CLOUD_DATA_SYNCED', syncCloudData);
+    return () => unsubSynced();
+  }, [user]);
+
   // Open Chat with any discovered user or friend
   const openChatWithUser = (targetUser) => {
     if (!targetUser) return;

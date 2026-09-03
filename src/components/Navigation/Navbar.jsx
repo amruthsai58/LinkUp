@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Heart,
+  Bell,
   MessageCircle,
   Search,
 } from 'lucide-react';
@@ -40,18 +40,20 @@ export const Navbar = () => {
 
         {/* Right: Heart (Notifications) + Message (Direct Chat) */}
         <div className="flex items-center gap-2">
-          {/* Notifications Heart */}
+          {/* Notifications Bell */}
           <button
             type="button"
             onClick={() => setActiveTab('notifications')}
             className={`relative p-2 rounded-full hover:bg-slate-800/80 transition-colors ${
               activeTab === 'notifications' ? 'text-purple-400' : 'text-slate-200'
             }`}
-            title="Notifications"
+            title="Notifications & Friend Requests"
           >
-            <Heart className="w-6 h-6" />
+            <Bell className="w-6 h-6" />
             {unreadNotifsCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 border-2 border-[#090C15]" />
+              <span className="absolute -top-1 -right-1 px-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white border-2 border-[#090C15] shadow-lg animate-pulse">
+                {unreadNotifsCount}
+              </span>
             )}
           </button>
 
@@ -68,7 +70,9 @@ export const Navbar = () => {
           >
             <MessageCircle className="w-6 h-6" />
             {unreadMsgCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#090C15]" />
+              <span className="absolute -top-1 -right-1 px-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white border-2 border-[#090C15] shadow-lg animate-pulse">
+                {unreadMsgCount}
+              </span>
             )}
           </button>
         </div>

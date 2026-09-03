@@ -43,19 +43,38 @@ export const ExploreView = () => {
   const [selectedTag, setSelectedTag] = useState(null);
   const [followedIds, setFollowedIds] = useState({});
   const [syncTick, setSyncTick] = useState(0);
+  const [cloudUsers, setCloudUsers] = useState(() => realtime.getRegisteredUsers());
 
-  // Re-render immediately whenever another device broadcasts a real-time profile, story, or live stream
+  // Re-render and update registered users immediately from the global cloud network
   useEffect(() => {
-    const unsubProfile = realtime.subscribe('USER_PROFILE_SYNC', () => setSyncTick((t) => t + 1));
+    realtime.refreshCloudUsers();
+
+    const unsubSynced = realtime.subscribe('CLOUD_DATA_SYNCED', (users) => {
+      if (users && Array.isArray(users)) {
+        setCloudUsers(users);
+      }
+    });
+    const unsubProfile = realtime.subscribe('USER_PROFILE_SYNC', () => {
+      setCloudUsers(realtime.getRegisteredUsers());
+    });
     const unsubLive = realtime.subscribe('LIVE_STREAM_STARTED', () => setSyncTick((t) => t + 1));
     const unsubLiveStop = realtime.subscribe('LIVE_STREAM_STOPPED', () => setSyncTick((t) => t + 1));
 
     return () => {
+      unsubSynced();
       unsubProfile();
       unsubLive();
       unsubLiveStop();
     };
   }, []);
+
+  // When query changes, refresh cloud users and ping peer directly
+  useEffect(() => {
+    if (query.trim()) {
+      realtime.refreshCloudUsers();
+      realtime.queryPeer(query.trim());
+    }
+  }, [query]);
 
   const CATEGORIES = ['All', 'People', 'Posts', 'Reels', 'Tags'];
 
@@ -75,10 +94,21 @@ export const ExploreView = () => {
   // Normalize string for flexible matching
   const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // 1. Search registered accounts across local network
-  const registeredMatches = searchRegisteredUsers(cleanQuery).filter(
-    (u) => !authUser || u.id !== authUser.id
-  );
+  // 1. Search registered accounts across local network & global cloud sync
+  const matchedCloud = cloudUsers.filter((u) => {
+    if (!cleanQuery) return true;
+    const uName = normalize(u.name);
+    const uUser = normalize(u.username);
+    const uId = normalize(u.linkupId);
+
+    return (
+      uName.includes(cleanNorm) ||
+      uUser.includes(cleanNorm) ||
+      uId.includes(cleanNorm) ||
+      (cleanNorm.startsWith('lk') && uId.includes(cleanNorm.replace(/^lk/, ''))) ||
+      (!cleanNorm.startsWith('lk') && uId.includes(`lk${cleanNorm}`))
+    );
+  });
 
   // 2. Search friends list with flexible normalization
   const matchedFriends = friends.filter((f) => {
@@ -98,17 +128,17 @@ export const ExploreView = () => {
 
   // 3. Combine unique people
   const combinedPeople = [
-    ...registeredMatches.map((u) => ({
-      id: u.id,
-      name: u.name,
+    ...matchedCloud.map((u) => ({
+      id: u.id || `user-${u.username}`,
+      name: u.name || u.username,
       username: u.username,
-      linkupId: u.linkupId || 'LK-NEW',
-      avatar: u.avatar,
+      linkupId: u.linkupId || 'LK-USER',
+      avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
       isRegisteredUser: true,
       isFollowing: false,
     })),
     ...matchedFriends.filter(
-      (f) => !registeredMatches.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
+      (f) => !matchedCloud.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
     ),
   ];
 

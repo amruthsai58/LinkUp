@@ -40,13 +40,21 @@ class RealtimeService {
     }
   }
 
+  getRegisteredUsers() {
+    try {
+      return JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Connect to global cloud relay for 100% real-time multi-device sync
    */
   async initCloudRelay() {
-    // A. Fetch recent profile syncs and live broadcasts from the past 24 hours
+    // A. Fetch recent profile syncs and live broadcasts from the past 72 hours
     try {
-      const res = await fetch(`${CLOUD_URL}/json?poll=1&since=24h`);
+      const res = await fetch(`${CLOUD_URL}/json?poll=1&since=72h`);
       if (res.ok) {
         const text = await res.text();
         const lines = text.trim().split('\n');
@@ -56,11 +64,12 @@ class RealtimeService {
             if (data && data.message) {
               const parsed = JSON.parse(data.message);
               if (parsed.type && parsed.payload) {
-                this.handleIncomingPayload(parsed.type, parsed.payload, false);
+                this.handleIncomingPayload(parsed.type, parsed.payload, true);
               }
             }
           } catch {}
         });
+        this.emit('CLOUD_DATA_SYNCED', this.getRegisteredUsers());
       }
     } catch (e) {
       console.warn('Cloud relay history poll fallback:', e);
@@ -135,12 +144,64 @@ class RealtimeService {
    */
   async publishToCloud(type, payload) {
     try {
-      fetch(CLOUD_URL, {
+      // POST to https://ntfy.sh root with topic & message so ntfy delivers it as a valid JSON string
+      fetch('https://ntfy.sh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, payload }),
+        body: JSON.stringify({
+          topic: CLOUD_TOPIC,
+          message: JSON.stringify({ type, payload }),
+        }),
       }).catch(() => {});
     } catch {}
+  }
+
+  /**
+   * Refresh all registered accounts from cloud relay on demand
+   */
+  async refreshCloudUsers() {
+    try {
+      const res = await fetch(`https://ntfy.sh/${CLOUD_TOPIC}/json?poll=1&since=72h`);
+      if (res.ok) {
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        lines.forEach((line) => {
+          try {
+            const data = JSON.parse(line);
+            if (data && data.message) {
+              const parsed = JSON.parse(data.message);
+              if (parsed.type && parsed.payload) {
+                this.handleIncomingPayload(parsed.type, parsed.payload, true);
+              }
+            }
+          } catch {}
+        });
+      }
+    } catch {}
+  }
+
+  /**
+   * Directly query a remote peer by ID over WebRTC
+   */
+  queryPeer(idStr) {
+    if (!this.peer || !idStr) return;
+    const peerId = formatPeerId(idStr);
+    if (peerId === this.peerId) return;
+
+    try {
+      let conn = this.activeConnections.get(peerId);
+      if (!conn || !conn.open) {
+        conn = this.peer.connect(peerId);
+        this.setupConnection(conn);
+        conn.on('open', () => {
+          conn.send({ type: 'WHO_ARE_YOU' });
+        });
+      } else {
+        conn.send({ type: 'WHO_ARE_YOU' });
+      }
+    } catch (e) {
+      console.warn('Peer query fallback:', e);
+    }
   }
 
   /**

@@ -46,7 +46,7 @@ export const calculatePasswordStrength = (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  // No default logged-in account — starts with null so the signup screen is shown on open
+  // Always starts unauthenticated on any device if not explicitly signed up/in
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('linkup_auth_user');
     return saved ? JSON.parse(saved) : null;
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
-  // Login accepting username OR email OR demo bypass
+  // Login with credentials
   const login = (identifier, password) => {
     if (typeof identifier === 'object' && identifier !== null) {
       setUser(identifier);
@@ -78,7 +78,11 @@ export const AuthProvider = ({ children }) => {
       return identifier;
     }
 
-    const cleanIdentifier = (identifier || 'ashok.lingaraddi').trim();
+    if (!identifier || !identifier.trim() || !password) {
+      throw new Error('Please enter your username/email and password.');
+    }
+
+    const cleanIdentifier = identifier.trim();
 
     // Check if user exists in saved registered accounts
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
@@ -96,7 +100,7 @@ export const AuthProvider = ({ children }) => {
       return foundUser;
     }
 
-    // Default synthesized account from email / identifier
+    // Create session for user
     const isEmail = cleanIdentifier.includes('@');
     const derivedName = isEmail
       ? cleanIdentifier.split('@')[0].replace(/[._]/g, ' ')
@@ -106,11 +110,20 @@ export const AuthProvider = ({ children }) => {
       : cleanIdentifier.toLowerCase().replace(/\s+/g, '.');
 
     const newUser = {
-      ...CURRENT_USER,
       id: `user-${Date.now()}`,
       name: derivedName.charAt(0).toUpperCase() + derivedName.slice(1),
       username: derivedUsername,
       email: isEmail ? cleanIdentifier : `${cleanIdentifier.toLowerCase()}@gmail.com`,
+      avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80`,
+      role: 'LinkUp Member',
+      work: 'Member',
+      bio: 'Happy to connect on LinkUp!',
+      location: 'India',
+      postsCount: 0,
+      friendsCount: 0,
+      followingCount: 0,
+      highlights: [],
+      gallery: [],
     };
 
     setUser(newUser);
@@ -120,9 +133,9 @@ export const AuthProvider = ({ children }) => {
     return newUser;
   };
 
-  // Signup with full fallbacks
+  // Signup with newly entered profile details
   const signup = ({ name, username, email, password, dob, gender, avatar }) => {
-    const effectiveName = (name || username || 'New LinkUp User').trim();
+    const effectiveName = (name || username || 'New User').trim();
     const effectiveUsername = (username || effectiveName.toLowerCase().replace(/\s+/g, '.') || `user_${Date.now().toString().slice(-4)}`).trim().toLowerCase();
     const effectiveEmail = (email || `${effectiveUsername}@gmail.com`).trim().toLowerCase();
     const effectivePassword = password || 'Linkup@2026';
@@ -133,28 +146,24 @@ export const AuthProvider = ({ children }) => {
       username: effectiveUsername,
       email: effectiveEmail,
       password: effectivePassword,
-      dob: dob || '2003-01-01',
-      gender: gender || 'Not specified',
+      dob: dob || '',
+      gender: gender || 'Rather not say',
       avatar: avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80`,
       coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
       bio: 'Excited to be on LinkUp! Connecting, sharing, and listening to regional tunes 🎶',
       role: 'LinkUp Creator',
-      work: 'Student / Creator',
-      education: 'Computer Science & Engineering',
+      work: 'Creator / Student',
+      education: 'Computer Science',
       location: 'Karnataka, India',
       website: `linkup.dev/${effectiveUsername}`,
       postsCount: 0,
-      friendsCount: 1,
-      followingCount: 5,
+      friendsCount: 0,
+      followingCount: 0,
       highlights: [
         { id: 'hl-1', name: 'Life 🌴', icon: '🌴', color: 'border-emerald-500/80', stories: [] },
         { id: 'hl-2', name: 'Vibes 🎵', icon: '🎵', color: 'border-purple-500/80', stories: [] },
       ],
-      gallery: [
-        'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=80',
-        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80',
-        'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-      ],
+      gallery: [],
     };
 
     // Save to registered accounts list in localStorage
@@ -171,20 +180,24 @@ export const AuthProvider = ({ children }) => {
 
   // Google OAuth simulation
   const loginWithGoogle = (googleUserData) => {
-    const email = googleUserData?.email || 'ashok.lingaraddi.dev@gmail.com';
-    const name = googleUserData?.name || 'Ashok Lingaraddi';
+    const email = googleUserData?.email || 'user@gmail.com';
+    const name = googleUserData?.name || 'LinkUp User';
     const avatar =
       googleUserData?.picture ||
-      `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&q=80`;
+      `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80`;
 
     const newUser = {
-      ...CURRENT_USER,
       id: `google-${Date.now()}`,
       name,
       username: email.split('@')[0].toLowerCase(),
       email,
       avatar,
       authProvider: 'google',
+      postsCount: 0,
+      friendsCount: 0,
+      followingCount: 0,
+      highlights: [],
+      gallery: [],
     };
 
     setUser(newUser);
@@ -204,7 +217,7 @@ export const AuthProvider = ({ children }) => {
   // Update profile
   const updateUserProfile = (updatedFields) => {
     setUser((prev) => {
-      const updated = { ...(prev || CURRENT_USER), ...updatedFields };
+      const updated = { ...(prev || {}), ...updatedFields };
       localStorage.setItem('linkup_auth_user', JSON.stringify(updated));
       return updated;
     });

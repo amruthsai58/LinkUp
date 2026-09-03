@@ -7,13 +7,9 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  Sparkles,
-  ArrowRight,
-  ChevronRight,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth, calculatePasswordStrength } from '../../context/AuthContext';
-import { CURRENT_USER } from '../../data/mockSocialData';
 import { Logo } from '../Common/Logo';
 
 export const WelcomeScreen = () => {
@@ -25,15 +21,15 @@ export const WelcomeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Signup fields
+  // Signup fields (Clean - No demo details)
   const [name, setName] = useState('');
   const [signupUsername, setSignupUsername] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [dob, setDob] = useState('2003-05-15');
-  const [gender, setGender] = useState('Male');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('Rather not say');
 
-  // Login fields
+  // Login fields (Clean - No demo details)
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
@@ -50,16 +46,16 @@ export const WelcomeScreen = () => {
   const handleSignupSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!signupPassword) {
-      setErrorMsg('Please enter a password');
+    if (!name.trim() || !signupUsername.trim() || !signupEmail.trim() || !signupPassword) {
+      setErrorMsg('Please fill in all required fields.');
       return;
     }
     setLoading(true);
     try {
       signup({
-        name: name || signupUsername || 'LinkUp Creator',
-        username: signupUsername || name.toLowerCase().replace(/\s+/g, '.'),
-        email: signupEmail,
+        name: name.trim(),
+        username: signupUsername.trim(),
+        email: signupEmail.trim(),
         password: signupPassword,
         dob,
         gender,
@@ -75,20 +71,19 @@ export const WelcomeScreen = () => {
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
+    if (!loginIdentifier.trim() || !loginPassword) {
+      setErrorMsg('Please enter your username/email and password.');
+      return;
+    }
     setLoading(true);
     try {
-      login(loginIdentifier || 'ashok.lingaraddi', loginPassword || 'Linkup@2026');
+      login(loginIdentifier, loginPassword);
       setActiveTab('home');
     } catch (err) {
       setErrorMsg(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleExploreGuest = () => {
-    login(CURRENT_USER);
-    setActiveTab('home');
   };
 
   return (
@@ -159,7 +154,7 @@ export const WelcomeScreen = () => {
                   required
                   value={name}
                   onChange={handleNameChange}
-                  placeholder="e.g. Ashok Lingaraddi"
+                  placeholder="Enter your full name"
                   className="w-full pl-9 pr-3.5 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -175,7 +170,7 @@ export const WelcomeScreen = () => {
                   required
                   value={signupUsername}
                   onChange={(e) => setSignupUsername(e.target.value.toLowerCase().replace(/\s+/g, '.'))}
-                  placeholder="username"
+                  placeholder="choose_username"
                   className="w-full pl-8 pr-3.5 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -183,7 +178,7 @@ export const WelcomeScreen = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">Email or Phone</label>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">Email or Mobile Phone</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -207,7 +202,7 @@ export const WelcomeScreen = () => {
                   required
                   value={signupPassword}
                   onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder="Create strong password"
+                  placeholder="Create password"
                   className="w-full pl-9 pr-10 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
                 <button
@@ -241,7 +236,7 @@ export const WelcomeScreen = () => {
             {/* Date of Birth & Gender Grid */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Birthdate</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Birthdate (Optional)</label>
                 <div className="relative">
                   <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                   <input
@@ -260,10 +255,10 @@ export const WelcomeScreen = () => {
                   onChange={(e) => setGender(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
                 >
+                  <option value="Rather not say">Prefer not to say</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Custom">Custom</option>
-                  <option value="Rather not say">Prefer not to say</option>
                 </select>
               </div>
             </div>
@@ -289,7 +284,7 @@ export const WelcomeScreen = () => {
                   required
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
-                  placeholder="e.g. ashok.lingaraddi or email"
+                  placeholder="Enter your username or email"
                   className="w-full pl-9 pr-3.5 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -322,7 +317,7 @@ export const WelcomeScreen = () => {
               disabled={loading}
               className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.01] active:scale-98 disabled:opacity-50"
             >
-              {loading ? 'Logging in...' : 'Log In to LinkUp'}
+              {loading ? 'Logging In...' : 'Log In to LinkUp'}
             </button>
           </form>
         )}
@@ -359,16 +354,6 @@ export const WelcomeScreen = () => {
             />
           </svg>
           <span>Continue with Google</span>
-        </button>
-
-        {/* Explore as Guest Link */}
-        <button
-          type="button"
-          onClick={handleExploreGuest}
-          className="text-center text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center justify-center gap-1 transition-colors"
-        >
-          <span>Explore as Guest</span>
-          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

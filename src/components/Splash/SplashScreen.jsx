@@ -241,12 +241,6 @@ export const SplashScreen = ({ onFinish }) => {
             <span className="text-purple-500 font-black mx-1">•</span>
             <span>GROW<span className="text-blue-400 font-black">.</span></span>
           </div>
-
-          {/* Regional Sound Badge */}
-          <div className="flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>105 Regional Hits • Kannada • Telugu • Tamil</span>
-          </div>
         </div>
 
         {/* Cinematic Loading Progress Bar */}

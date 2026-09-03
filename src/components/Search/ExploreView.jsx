@@ -12,6 +12,9 @@ import {
   ChevronRight,
   X,
   MessageCircle,
+  UserPlus,
+  Check,
+  Copy,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
@@ -32,6 +35,8 @@ export const ExploreView = () => {
 
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState(null);
+  const [copiedId, setCopiedId] = useState(false);
+  const [followedIds, setFollowedIds] = useState({});
 
   // Removed Groups option
   const CATEGORIES = ['All', 'People', 'Posts', 'Reels', 'Tags'];
@@ -122,8 +127,56 @@ export const ExploreView = () => {
 
   return (
     <div className="w-full flex flex-col gap-4 pb-20 select-none text-slate-100 animate-in fade-in duration-200">
-      {/* Search Input Bar */}
-      <div className="px-2 pt-1">
+      {/* Dedicated "Connect & Follow by LinkUp ID" Card */}
+      <div className="mx-2 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/50 to-slate-900 border border-purple-500/40 shadow-xl flex flex-col gap-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-600/30 border border-purple-500/50 flex items-center justify-center text-purple-300 font-black text-xs">
+              ID
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-white flex items-center gap-1.5">
+                <span>Enter LinkUp ID to Follow</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                Type or paste a friend's ID (e.g. <span className="text-purple-300 font-mono">LK-58492</span>) to follow & chat
+              </p>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold">
+            Real-time
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-purple-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (selectedTag && !e.target.value) setSelectedTag(null);
+              }}
+              placeholder="Paste or type LinkUp ID (e.g. LK-12345)..."
+              className="w-full pl-8 pr-8 py-2 bg-slate-900/90 border border-purple-500/40 rounded-xl text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 shadow-inner"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={handleClearTagFilter}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* General Search Input Bar */}
+      <div className="px-2">
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
@@ -133,7 +186,7 @@ export const ExploreView = () => {
               setQuery(e.target.value);
               if (selectedTag && !e.target.value) setSelectedTag(null);
             }}
-            placeholder="Search people, tags (#DSA, #Java...), posts, reels..."
+            placeholder="Search all: LinkUp ID, username, posts, or tags (#DSA)..."
             className="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
           />
           {query && (
@@ -386,14 +439,27 @@ export const ExploreView = () => {
 
                   <button
                     type="button"
-                    onClick={() => toggleFollowFriend(person.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      person.isFollowing
+                    onClick={() => {
+                      toggleFollowFriend(person.id);
+                      setFollowedIds((prev) => ({ ...prev, [person.id]: !prev[person.id] }));
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                      person.isFollowing || followedIds[person.id]
                         ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md'
                     }`}
                   >
-                    {person.isFollowing ? 'Following' : 'Follow'}
+                    {person.isFollowing || followedIds[person.id] ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Follow</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

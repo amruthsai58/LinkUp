@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Heart,
   MessageCircle,
+  Search,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { Logo } from '../Common/Logo';
@@ -22,9 +23,20 @@ export const Navbar = () => {
       {/* Main App Top Header */}
       <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
         {/* Left: Official Brand Logo with intertwined Blue & Purple links */}
-        <div onClick={() => setActiveTab('home')}>
+        <div onClick={() => setActiveTab('home')} className="cursor-pointer">
           <Logo size="md" showTagline={false} />
         </div>
+
+        {/* Center: Find by LinkUp ID Quick Button */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('search')}
+          className="px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-purple-950/40 border border-slate-700/80 hover:border-purple-500/50 text-slate-300 hover:text-purple-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm group"
+        >
+          <Search className="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform" />
+          <span className="hidden sm:inline">Enter LinkUp ID (LK-...)</span>
+          <span className="sm:hidden">Find ID</span>
+        </button>
 
         {/* Right: Heart (Notifications) + Message (Direct Chat) */}
         <div className="flex items-center gap-2">

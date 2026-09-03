@@ -170,23 +170,35 @@ export const ProfileView = () => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopyId}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-purple-300 flex items-center gap-1.5 transition-all active:scale-95 shadow"
-          >
-            {idCopied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
-                <span className="text-emerald-400">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy ID</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleCopyId}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-purple-300 flex items-center gap-1.5 transition-all active:scale-95 shadow"
+            >
+              {idCopied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                  <span className="text-emerald-400">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy ID</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('search')}
+              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-purple-600/30"
+              title="Enter friend's ID to follow"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Follow by ID</span>
+            </button>
+          </div>
         </div>
 
         {/* Action Buttons */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Shield, Lock, EyeOff, Users, Star, Check, Search } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 
@@ -15,6 +15,14 @@ export const StoryPrivacyModal = ({
   const [selectedHiddenIds, setSelectedHiddenIds] = useState(hiddenUserIds);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('audience'); // 'audience' | 'hide'
+
+  useEffect(() => {
+    if (isOpen) {
+      setPrivacy(currentPrivacy);
+      setSelectedHiddenIds(hiddenUserIds);
+      setSearchQuery('');
+    }
+  }, [isOpen, currentPrivacy, hiddenUserIds]);
 
   if (!isOpen) return null;
 
@@ -55,7 +63,8 @@ export const StoryPrivacyModal = ({
       f.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSave = () => {
+  const handleSave = (e) => {
+    if (e) e.stopPropagation();
     onSavePrivacy({
       privacy,
       hiddenFromUserIds: selectedHiddenIds,
@@ -64,7 +73,10 @@ export const StoryPrivacyModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none">
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="fixed inset-0 z-70 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none"
+    >
       <div className="relative w-full max-w-md bg-[#0A0D18] border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-slate-100">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">

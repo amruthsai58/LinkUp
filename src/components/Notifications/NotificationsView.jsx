@@ -3,7 +3,7 @@ import { Heart, MessageCircle, UserPlus, Check, X } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 
 export const NotificationsView = () => {
-  const { notifications, handleFriendRequest } = useSocial();
+  const { notifications, handleFriendRequest, viewUserProfile } = useSocial();
   const [activeFilter, setActiveFilter] = useState('All'); // 'All' | 'Unread' | 'Mentions' | 'Friends'
 
   const FILTERS = ['All', 'Unread', 'Mentions', 'Friends'];
@@ -58,12 +58,20 @@ export const NotificationsView = () => {
                   <img
                     src={n.user.avatar}
                     alt={n.user.name}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-700 mt-0.5 flex-shrink-0"
+                    onClick={() => viewUserProfile(n.user)}
+                    className="w-10 h-10 rounded-full object-cover border border-slate-700 mt-0.5 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                    title={`View ${n.user.name}'s Profile`}
                   />
 
                   <div className="min-w-0">
                     <p className="text-xs text-slate-200 leading-snug">
-                      <span className="font-bold text-white mr-1">{n.user.name}</span>
+                      <span
+                        onClick={() => viewUserProfile(n.user)}
+                        className="font-bold text-white mr-1 cursor-pointer hover:text-purple-300 hover:underline transition-colors"
+                        title={`View ${n.user.name}'s Profile`}
+                      >
+                        {n.user.name}
+                      </span>
                       <span>{n.action}</span>
                     </p>
                     <span className="text-[10px] text-slate-500 mt-0.5 block">{n.time}</span>

@@ -140,6 +140,14 @@ export const SocialProvider = ({ children }) => {
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileUserId, setProfileUserId] = useState(null);
+  const [viewingUser, setViewingUser] = useState(null);
+
+  const viewUserProfile = (targetUser) => {
+    if (!targetUser) return;
+    setViewingUser(targetUser);
+    setActiveTab('profile');
+  };
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -895,6 +903,9 @@ export const SocialProvider = ({ children }) => {
         setIsProfileOpen,
         profileUserId,
         setProfileUserId,
+        viewingUser,
+        setViewingUser,
+        viewUserProfile,
         isSettingsOpen,
         setIsSettingsOpen,
         isNotificationsOpen,

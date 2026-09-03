@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ChevronDown,
+  ChevronLeft,
   Menu,
   UserPlus,
   Grid,
@@ -15,6 +16,8 @@ import {
   Trash2,
   Copy,
   Check,
+  Radio,
+  MessageCircle,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,7 +28,16 @@ import { CreateHighlightModal } from './CreateHighlightModal';
 import { EditHighlightModal } from './EditHighlightModal';
 
 export const ProfileView = () => {
-  const { setActiveTab } = useSocial();
+  const {
+    setActiveTab,
+    viewingUser,
+    setViewingUser,
+    toggleFollowFriend,
+    friends,
+    openChatWithUser,
+    activeLiveStreams,
+    watchLive,
+  } = useSocial();
   const { user: authUser, updateUserProfile } = useAuth();
   const [activeTabSub, setActiveTabSub] = useState('grid'); // 'grid' | 'reels' | 'tagged'
 
@@ -37,8 +49,62 @@ export const ProfileView = () => {
   const [contextMenuHlId, setContextMenuHlId] = useState(null);
   const [idCopied, setIdCopied] = useState(false);
 
-  const user = authUser || CURRENT_USER;
-  const highlights = user.highlights || CURRENT_USER.highlights;
+  // Check if viewing own profile or friend's profile
+  const isMyProfile = !viewingUser || (authUser && (
+    (viewingUser.username && authUser.username && viewingUser.username.toLowerCase() === authUser.username.toLowerCase()) ||
+    (viewingUser.linkupId && authUser.linkupId && viewingUser.linkupId.toLowerCase() === authUser.linkupId.toLowerCase()) ||
+    viewingUser.id === authUser.id
+  ));
+
+  const user = isMyProfile ? (authUser || CURRENT_USER) : viewingUser;
+  const highlights = user.highlights || CURRENT_USER.highlights || [];
+
+  // Persistent following state
+  const [followedUsers, setFollowedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('linkup_following_usernames') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const isFriendFollowed = Boolean(
+    followedUsers[user.username?.toLowerCase()] ||
+    followedUsers[user.linkupId?.toLowerCase()] ||
+    followedUsers[user.id] ||
+    user.isFollowing ||
+    friends.some(
+      (f) =>
+        ((f.username && user.username && f.username.toLowerCase() === user.username.toLowerCase()) ||
+         (f.linkupId && user.linkupId && f.linkupId.toLowerCase() === user.linkupId.toLowerCase()) ||
+         f.id === user.id) &&
+        (f.isFollowing || f.isFriend)
+    )
+  );
+
+  const handleToggleFollow = () => {
+    toggleFollowFriend(user);
+    const nextState = !isFriendFollowed;
+    const updated = {
+      ...followedUsers,
+      [user.username?.toLowerCase()]: nextState,
+      [user.linkupId?.toLowerCase()]: nextState,
+      [user.id]: nextState,
+    };
+    setFollowedUsers(updated);
+    try {
+      localStorage.setItem('linkup_following_usernames', JSON.stringify(updated));
+    } catch {}
+  };
+
+  // Check if user is currently streaming live
+  const liveStreamObj = activeLiveStreams?.find(
+    (s) =>
+      s.broadcasterId === user.id ||
+      (s.broadcasterUsername && user.username && s.broadcasterUsername.toLowerCase() === user.username.toLowerCase()) ||
+      s.broadcasterId === user.linkupId
+  );
+  const isUserLive = Boolean(liveStreamObj);
 
   const handleCopyId = () => {
     if (user.linkupId) {
@@ -88,37 +154,74 @@ export const ProfileView = () => {
       <div className="w-full flex flex-col gap-4 pb-20 select-none text-slate-100 animate-in fade-in duration-200">
         {/* Top Header Bar */}
         <div className="flex items-center justify-between px-2 pt-1 pb-2 border-b border-slate-800/80">
-          <div className="flex items-center gap-1 cursor-pointer">
+          <div className="flex items-center gap-2">
+            {!isMyProfile && (
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingUser(null);
+                  setActiveTab('search');
+                }}
+                className="p-1.5 -ml-1 rounded-full hover:bg-slate-800 text-slate-300 transition-colors flex items-center gap-1 text-xs font-bold"
+              >
+                <ChevronLeft className="w-5 h-5 text-purple-400" />
+                <span>Back</span>
+              </button>
+            )}
             <h2 className="text-base font-extrabold tracking-tight text-white">{user.username}</h2>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            {isMyProfile && <ChevronDown className="w-4 h-4 text-slate-400" />}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('menu')}
-            className="p-2 rounded-full hover:bg-slate-800 text-slate-300 transition-colors"
-            title="Menu & Settings"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+          {isMyProfile ? (
+            <button
+              type="button"
+              onClick={() => setActiveTab('menu')}
+              className="p-2 rounded-full hover:bg-slate-800 text-slate-300 transition-colors"
+              title="Menu & Settings"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openChatWithUser(user)}
+              className="p-2 rounded-full hover:bg-slate-800 text-purple-400 transition-colors"
+              title="Send Message"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Main Profile Header Row: Avatar + Stats */}
         <div className="flex items-center justify-between px-2 gap-4">
           {/* Large Avatar with Gradient Ring */}
           <div
-            onClick={() => setIsEditModalOpen(true)}
-            className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-xl flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
-            title="Click to edit profile picture"
+            onClick={() => {
+              if (isMyProfile) {
+                setIsEditModalOpen(true);
+              }
+            }}
+            className={`relative w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-xl flex-shrink-0 transition-transform ${
+              isMyProfile ? 'cursor-pointer hover:scale-105' : ''
+            }`}
+            title={isMyProfile ? "Click to edit profile picture" : user.name}
           >
             <img
               src={user.avatar || CURRENT_USER.avatar}
               alt={user.name}
               className="w-full h-full rounded-full object-cover border-2 border-[#090C15]"
             />
-            <div className="absolute bottom-0 right-0 p-1 rounded-full bg-purple-600 text-white border-2 border-[#090C15] shadow-md">
-              <Edit2 className="w-2.5 h-2.5" />
-            </div>
+            {isMyProfile && (
+              <div className="absolute bottom-0 right-0 p-1 rounded-full bg-purple-600 text-white border-2 border-[#090C15] shadow-md">
+                <Edit2 className="w-2.5 h-2.5" />
+              </div>
+            )}
+            {isUserLive && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-red-600 text-[9px] font-black text-white border border-[#090C15] uppercase tracking-wider animate-pulse shadow-lg">
+                LIVE
+              </span>
+            )}
           </div>
 
           {/* 3 Stats Columns */}
@@ -143,8 +246,8 @@ export const ProfileView = () => {
         {/* Bio Section */}
         <div className="px-2 flex flex-col gap-0.5">
           <h3 className="text-sm font-black text-white">{user.name}</h3>
-          <p className="text-xs text-slate-300 font-medium">{user.role || user.work || 'Computer Science Student'}</p>
-          <p className="text-xs text-slate-400">{user.subtitle || user.bio || 'Java Developer | Problem Solver'}</p>
+          <p className="text-xs text-slate-300 font-medium">{user.role || user.work || 'LinkUp Member'}</p>
+          <p className="text-xs text-slate-400">{user.subtitle || user.bio || 'Connecting and sharing on LinkUp 🚀'}</p>
           <a
             href={`https://${user.website || 'linkup.dev/' + user.username}`}
             target="_blank"
@@ -189,37 +292,85 @@ export const ProfileView = () => {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('search')}
-              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-purple-600/30"
-              title="Enter friend's ID to follow"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Follow by ID</span>
-            </button>
+            {isMyProfile && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('search')}
+                className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-purple-600/30"
+                title="Enter friend's ID to follow"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Follow by ID</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2.5 px-2">
-          <button
-            type="button"
-            onClick={() => setIsEditModalOpen(true)}
-            className="py-2 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all hover:scale-[1.01]"
-          >
-            Edit Profile
-          </button>
+        {/* Action Buttons: Own Profile vs Friend's Profile */}
+        {isMyProfile ? (
+          <div className="grid grid-cols-2 gap-2.5 px-2">
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="py-2 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all hover:scale-[1.01]"
+            >
+              Edit Profile
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('search')}
-            className="py-2 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
-          >
-            <span>Add Friends</span>
-            <UserPlus className="w-3.5 h-3.5 text-purple-400" />
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('search')}
+              className="py-2 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
+            >
+              <span>Add Friends</span>
+              <UserPlus className="w-3.5 h-3.5 text-purple-400" />
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 px-2">
+            <button
+              type="button"
+              onClick={handleToggleFollow}
+              className={`py-2 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                isFriendFollowed
+                  ? 'bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-600/30 hover:opacity-90'
+              }`}
+            >
+              {isFriendFollowed ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                  <span className="text-emerald-300">Following</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Follow</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openChatWithUser(user)}
+              className="py-2 px-4 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-purple-400" />
+              <span>Message</span>
+            </button>
+
+            {isUserLive && (
+              <button
+                type="button"
+                onClick={() => watchLive(liveStreamObj)}
+                className="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all animate-pulse col-span-2 sm:col-span-1 shadow-lg shadow-red-600/30"
+              >
+                <Radio className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Watch Live</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Story Highlights Row with Quick Context Actions */}
         <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar px-2 py-1 relative">

@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const BottomNavBar = () => {
-  const { activeTab, setActiveTab, setCreatePostOpen } = useSocial();
+  const { activeTab, setActiveTab, setCreatePostOpen, setViewingUser } = useSocial();
   const { user: authUser } = useAuth();
 
   const user = authUser || CURRENT_USER;
@@ -71,7 +71,10 @@ export const BottomNavBar = () => {
       {/* Profile Button */}
       <button
         type="button"
-        onClick={() => setActiveTab('profile')}
+        onClick={() => {
+          if (setViewingUser) setViewingUser(null);
+          setActiveTab('profile');
+        }}
         className={`p-1.5 rounded-full transition-all ${
           activeTab === 'profile' ? 'ring-2 ring-purple-500 scale-110' : 'opacity-70 hover:opacity-100'
         }`}

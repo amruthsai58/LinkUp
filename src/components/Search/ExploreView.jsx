@@ -36,14 +36,58 @@ export const ExploreView = () => {
     setSearchCategory,
     setActiveTab,
     openChatWithUser,
+    viewUserProfile,
   } = useSocial();
   const { searchRegisteredUsers, user: authUser } = useAuth();
 
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState(null);
-  const [followedIds, setFollowedIds] = useState({});
   const [syncTick, setSyncTick] = useState(0);
   const [cloudUsers, setCloudUsers] = useState(() => realtime.getRegisteredUsers());
+
+  // Persistent following state
+  const [followedUsers, setFollowedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('linkup_following_usernames') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const checkIsFollowed = (p) => {
+    if (!p) return false;
+    const uKey = p.username?.toLowerCase();
+    const idKey = p.linkupId?.toLowerCase();
+    return Boolean(
+      followedUsers[uKey] ||
+      followedUsers[idKey] ||
+      followedUsers[p.id] ||
+      p.isFollowing ||
+      friends.some(
+        (f) =>
+          ((f.username && p.username && f.username.toLowerCase() === p.username.toLowerCase()) ||
+           (f.linkupId && p.linkupId && f.linkupId.toLowerCase() === p.linkupId.toLowerCase()) ||
+           f.id === p.id) &&
+          (f.isFollowing || f.isFriend)
+      )
+    );
+  };
+
+  const handleToggleFollow = (person) => {
+    toggleFollowFriend(person);
+    const currentlyFollowed = checkIsFollowed(person);
+    const nextState = !currentlyFollowed;
+    const updated = {
+      ...followedUsers,
+      [person.username?.toLowerCase()]: nextState,
+      [person.linkupId?.toLowerCase()]: nextState,
+      [person.id]: nextState,
+    };
+    setFollowedUsers(updated);
+    try {
+      localStorage.setItem('linkup_following_usernames', JSON.stringify(updated));
+    } catch {}
+  };
 
   // Re-render and update registered users immediately from the global cloud network
   useEffect(() => {
@@ -134,8 +178,13 @@ export const ExploreView = () => {
       username: u.username,
       linkupId: u.linkupId || 'LK-USER',
       avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+      bio: u.bio,
+      role: u.role,
+      work: u.work,
+      hometown: u.hometown,
+      highlights: u.highlights,
       isRegisteredUser: true,
-      isFollowing: false,
+      isFollowing: checkIsFollowed(u),
     })),
     ...matchedFriends.filter(
       (f) => !matchedCloud.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
@@ -276,7 +325,7 @@ export const ExploreView = () => {
 
           <div className="flex flex-col gap-2">
             {combinedPeople.slice(0, searchCategory === 'All' && !query ? 5 : 40).map((person) => {
-              const isFollowed = person.isFollowing || followedIds[person.id];
+              const isFollowed = checkIsFollowed(person);
               const liveStream = activeLiveStreams.find(
                 (l) =>
                   l.broadcasterId === person.id ||
@@ -300,24 +349,30 @@ export const ExploreView = () => {
                       : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {/* Interactive Avatar: click to view Live or Stories */}
+                  <div
+                    onClick={() => viewUserProfile(person)}
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group hover:opacity-95"
+                    title={`Click to view ${person.name}'s Profile`}
+                  >
+                    {/* Interactive Avatar: click to view Live or Stories, or tap profile */}
                     <div
-                      onClick={() => {
+                      onClick={(e) => {
                         if (liveStream) {
+                          e.stopPropagation();
                           watchLive(liveStream);
                         } else if (hasStory) {
+                          e.stopPropagation();
                           setActiveStoryIndex(userStoryIndex);
                         }
                       }}
-                      className={`relative w-12 h-12 rounded-full p-0.5 flex-shrink-0 cursor-pointer transition-transform hover:scale-105 ${
+                      className={`relative w-12 h-12 rounded-full p-0.5 flex-shrink-0 cursor-pointer transition-transform group-hover:scale-105 ${
                         liveStream
                           ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-slate-900 animate-pulse'
                           : hasStory
                           ? 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600'
                           : 'border-2 border-purple-500/50'
                       }`}
-                      title={liveStream ? 'Broadcasting LIVE! Click to watch' : hasStory ? 'Click to view story' : person.name}
+                      title={liveStream ? 'Broadcasting LIVE! Click to watch' : hasStory ? 'Click to view story' : `View ${person.name}'s Profile`}
                     >
                       <img
                         src={person.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
@@ -333,7 +388,9 @@ export const ExploreView = () => {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="text-xs font-bold text-white truncate">{person.name}</h4>
+                        <h4 className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors truncate">
+                          {person.name}
+                        </h4>
                         {person.linkupId && (
                           <span className="px-2 py-0.5 rounded-md bg-purple-950 border border-purple-500/50 text-[10px] font-mono font-black text-purple-300 shadow-sm">
                             {person.linkupId}
@@ -381,11 +438,8 @@ export const ExploreView = () => {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        toggleFollowFriend(person);
-                        setFollowedIds((prev) => ({ ...prev, [person.id]: !prev[person.id] }));
-                      }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow ${
+                      onClick={() => handleToggleFollow(person)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow active:scale-95 ${
                         isFollowed
                           ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
                           : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30'

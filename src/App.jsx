@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { MusicProvider } from './context/MusicContext';
 import { SocialProvider, useSocial } from './context/SocialContext';
 
@@ -24,13 +24,32 @@ import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
 
 const MainAppContent = () => {
   const { activeTab } = useSocial();
+  const { user, isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
 
-  // Active view renderer
+  // UNCONDITIONAL AUTH GATE:
+  // If no user is logged in, ALWAYS show the Orbital Welcome Screen first
+  if (!user || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#06080F] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative justify-center items-center">
+        {/* Animated Brand Splash Screen */}
+        {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+
+        {/* Welcome Orbital Screen */}
+        <main className="w-full max-w-lg mx-auto px-4 py-6 flex flex-col justify-center items-center">
+          <WelcomeScreen />
+        </main>
+
+        {/* Clean Auth Modals */}
+        <AuthModal />
+        <GoogleAuthModal />
+      </div>
+    );
+  }
+
+  // Active view renderer for authenticated users
   const renderActiveScreen = () => {
     switch (activeTab) {
-      case 'auth_welcome':
-        return <WelcomeScreen />;
       case 'home':
         return <Feed />;
       case 'search':
@@ -54,7 +73,7 @@ const MainAppContent = () => {
 
   return (
     <div className="min-h-screen bg-[#06080F] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative">
-      {/* Animated Brand Splash Screen (Plays on every page load/open) */}
+      {/* Animated Brand Splash Screen */}
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
       {/* Top Navbar with LinkUp logo and notifications/messages */}
@@ -66,7 +85,7 @@ const MainAppContent = () => {
       </main>
 
       {/* Persistent Bottom 5-Icon Navigation Bar */}
-      {activeTab !== 'auth_welcome' && <BottomNavBar />}
+      <BottomNavBar />
 
       {/* Interactive Overlays */}
       <AuthModal />

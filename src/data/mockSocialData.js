@@ -44,6 +44,7 @@ export const CURRENT_USER = {
 export const INITIAL_FRIENDS = [
   {
     id: 'user-02',
+    linkupId: 'LK-20481',
     name: 'Rahul Kumar',
     username: 'rahul.kumar',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80',
@@ -55,6 +56,7 @@ export const INITIAL_FRIENDS = [
   },
   {
     id: 'user-03',
+    linkupId: 'LK-31954',
     name: 'Priya Sharma',
     username: 'priya.sharma',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
@@ -66,6 +68,7 @@ export const INITIAL_FRIENDS = [
   },
   {
     id: 'user-04',
+    linkupId: 'LK-48201',
     name: 'Kiran Gowda',
     username: 'kiran.gowda',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80',
@@ -78,6 +81,7 @@ export const INITIAL_FRIENDS = [
   },
   {
     id: 'user-05',
+    linkupId: 'LK-59123',
     name: 'Ananya Reddy',
     username: 'ananya.reddy',
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&q=80',
@@ -89,6 +93,7 @@ export const INITIAL_FRIENDS = [
   },
   {
     id: 'user-06',
+    linkupId: 'LK-67432',
     name: 'Sahana M.',
     username: 'sahana.m',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',

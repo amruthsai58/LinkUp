@@ -1,12 +1,19 @@
 import Peer from 'peerjs';
 
+export const formatPeerId = (idStr) => {
+  if (!idStr) return 'lk-user';
+  const clean = idStr.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^lk/, '');
+  return `lk-${clean || 'user'}`;
+};
+
 class RealtimeService {
   constructor() {
     this.listeners = new Map();
     this.peer = null;
     this.peerId = null;
-    this.activeConnections = new Map(); // peerId -> DataConnection
-    this.activeCalls = new Map(); // peerId -> MediaConnection
+    this.currentUser = null;
+    this.activeConnections = new Map();
+    this.activeCalls = new Map();
     this.localStream = null;
     this.isInitialized = false;
 
@@ -16,12 +23,27 @@ class RealtimeService {
       this.channel.onmessage = (event) => {
         const { type, payload } = event.data || {};
         if (type) {
-          this.emit(type, payload);
+          this.handleIncomingPayload(type, payload);
         }
       };
     } else {
       this.channel = null;
     }
+  }
+
+  handleIncomingPayload(type, payload) {
+    // Automatically save discovered users into registered directory
+    if (type === 'USER_ONLINE' && payload && payload.username) {
+      try {
+        const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+        if (!savedDb.some((u) => u.username?.toLowerCase() === payload.username.toLowerCase())) {
+          savedDb.unshift(payload);
+          localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+        }
+      } catch {}
+    }
+
+    this.emit(type, payload);
   }
 
   /**
@@ -30,8 +52,8 @@ class RealtimeService {
   init(user) {
     if (!user || typeof window === 'undefined') return;
 
-    const rawId = user.linkupId || user.username || user.id || 'user';
-    const cleanId = 'lk-' + rawId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    this.currentUser = user;
+    const cleanId = formatPeerId(user.linkupId || user.username || user.id);
 
     // If already connected with same ID, reuse
     if (this.peer && this.peerId === cleanId && !this.peer.destroyed) {
@@ -58,9 +80,9 @@ class RealtimeService {
       this.peer.on('open', (id) => {
         this.isInitialized = true;
         this.emit('CONNECTED', { peerId: id });
-        // Announce presence
+        // Announce presence across network
         this.broadcast('USER_ONLINE', {
-          userId: user.id,
+          id: user.id,
           username: user.username,
           linkupId: user.linkupId,
           peerId: id,
@@ -77,11 +99,10 @@ class RealtimeService {
       // Handle incoming media calls (watching a live video stream)
       this.peer.on('call', (call) => {
         this.activeCalls.set(call.peer, call);
-        // If broadcaster receives a viewer request, answer with local stream
         if (this.localStream) {
           call.answer(this.localStream);
         } else {
-          call.answer(); // Viewer receiving stream
+          call.answer();
         }
 
         call.on('stream', (remoteStream) => {
@@ -98,7 +119,6 @@ class RealtimeService {
       });
 
       this.peer.on('error', (err) => {
-        // If ID is already taken on cloud signaling, generate a suffixed ID
         if (err.type === 'unavailable-id') {
           const fallbackId = cleanId + '-' + Math.floor(Math.random() * 1000);
           this.peer = new Peer(fallbackId, {
@@ -119,7 +139,19 @@ class RealtimeService {
 
     conn.on('data', (data) => {
       if (data && data.type) {
-        this.emit(data.type, data.payload);
+        if (data.type === 'WHO_ARE_YOU' && this.currentUser) {
+          conn.send({
+            type: 'USER_ONLINE',
+            payload: {
+              id: this.currentUser.id,
+              name: this.currentUser.name,
+              username: this.currentUser.username,
+              linkupId: this.currentUser.linkupId,
+              avatar: this.currentUser.avatar,
+            },
+          });
+        }
+        this.handleIncomingPayload(data.type, data.payload);
       }
     });
 
@@ -166,10 +198,8 @@ class RealtimeService {
    * Broadcast an event to all tabs/devices
    */
   broadcast(type, payload) {
-    // 1. Emit locally
     this.emit(type, payload);
 
-    // 2. Broadcast across browser tabs
     if (this.channel) {
       try {
         this.channel.postMessage({ type, payload });
@@ -178,7 +208,6 @@ class RealtimeService {
       }
     }
 
-    // 3. Broadcast across connected WebRTC peers
     this.activeConnections.forEach((conn) => {
       if (conn.open) {
         conn.send({ type, payload });
@@ -194,16 +223,13 @@ class RealtimeService {
       ...message,
       recipientId: recipient.id,
       recipientUsername: recipient.username,
+      recipientLinkUpId: recipient.linkupId,
       timestamp: Date.now(),
     };
 
-    // Broadcast across tabs so local multi-user testing receives it instantly
     this.broadcast('NEW_DIRECT_MESSAGE', payload);
 
-    // Also attempt WebRTC direct transmission if peer is known
-    const targetPeerId = 'lk-' + (recipient.linkupId || recipient.username || recipient.id || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '');
+    const targetPeerId = formatPeerId(recipient.linkupId || recipient.username || recipient.id);
 
     if (this.peer && targetPeerId && targetPeerId !== this.peerId) {
       try {
@@ -236,7 +262,6 @@ class RealtimeService {
       isLive: true,
     };
 
-    // Store in active live sessions
     try {
       const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
       const filtered = activeLives.filter((l) => l.broadcasterId !== streamInfo.broadcasterId);
@@ -272,7 +297,6 @@ class RealtimeService {
     if (!this.peer || !broadcasterPeerId) return null;
 
     try {
-      // Connect to broadcaster via WebRTC call
       const call = this.peer.call(broadcasterPeerId, null);
       if (call) {
         call.on('stream', (remoteStream) => {
@@ -286,16 +310,10 @@ class RealtimeService {
     return null;
   }
 
-  /**
-   * Send a live comment to an active broadcast
-   */
   sendLiveComment(streamId, comment) {
     this.broadcast('LIVE_STREAM_COMMENT', { streamId, comment });
   }
 
-  /**
-   * Send a live heart reaction to an active broadcast
-   */
   sendLiveHeart(streamId, user) {
     this.broadcast('LIVE_STREAM_HEART', { streamId, user });
   }

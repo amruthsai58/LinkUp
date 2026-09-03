@@ -357,14 +357,24 @@ export const AuthProvider = ({ children }) => {
   const searchRegisteredUsers = (query) => {
     if (!query || !query.trim()) return [];
     const clean = query.trim().toLowerCase();
+    const cleanAlphanum = clean.replace(/[^a-z0-9]/g, '');
     try {
       const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-      return savedDb.filter(
-        (u) =>
-          u.username?.toLowerCase().includes(clean) ||
-          u.name?.toLowerCase().includes(clean) ||
-          u.linkupId?.toLowerCase().includes(clean)
-      );
+      return savedDb.filter((u) => {
+        const uId = (u.linkupId || '').toLowerCase();
+        const uIdAlphanum = uId.replace(/[^a-z0-9]/g, '');
+        const uName = (u.name || '').toLowerCase();
+        const uUser = (u.username || '').toLowerCase();
+
+        return (
+          uName.includes(clean) ||
+          uUser.includes(clean) ||
+          uId.includes(clean) ||
+          (cleanAlphanum && uIdAlphanum.includes(cleanAlphanum)) ||
+          (cleanAlphanum.startsWith('lk') && uIdAlphanum.includes(cleanAlphanum.replace(/^lk/, ''))) ||
+          (!cleanAlphanum.startsWith('lk') && uIdAlphanum.includes(`lk${cleanAlphanum}`))
+        );
+      });
     } catch {
       return [];
     }

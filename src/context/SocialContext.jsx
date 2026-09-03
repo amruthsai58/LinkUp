@@ -213,10 +213,21 @@ export const SocialProvider = ({ children }) => {
       }
     });
 
+    // 4. Subscribe to Real-Time New Stories from friends
+    const unsubStory = realtime.subscribe('NEW_STORY', (incomingStory) => {
+      if (incomingStory && incomingStory.id) {
+        setStories((prev) => {
+          if (prev.some((s) => s.id === incomingStory.id)) return prev;
+          return [incomingStory, ...prev];
+        });
+      }
+    });
+
     return () => {
       unsubLiveStart();
       unsubLiveStop();
       unsubMessages();
+      unsubStory();
     };
   }, [user, activeLiveStreamToWatch]);
 
@@ -381,6 +392,7 @@ export const SocialProvider = ({ children }) => {
     };
 
     setStories((prev) => [newStory, ...prev]);
+    realtime.broadcast('NEW_STORY', newStory);
     setCreateStoryOpen(false);
   };
 

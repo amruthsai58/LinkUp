@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Users,
@@ -15,16 +15,22 @@ import {
   UserPlus,
   Check,
   Copy,
+  Radio,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
 import { PostCard } from '../Feed/PostCard';
+import { realtime } from '../../services/realtimeService';
 
 export const ExploreView = () => {
   const {
     friends,
     posts,
     reels,
+    stories,
+    setActiveStoryIndex,
+    activeLiveStreams,
+    watchLive,
     toggleFollowFriend,
     searchCategory,
     setSearchCategory,
@@ -36,6 +42,20 @@ export const ExploreView = () => {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState(null);
   const [followedIds, setFollowedIds] = useState({});
+  const [syncTick, setSyncTick] = useState(0);
+
+  // Re-render immediately whenever another device broadcasts a real-time profile, story, or live stream
+  useEffect(() => {
+    const unsubProfile = realtime.subscribe('USER_PROFILE_SYNC', () => setSyncTick((t) => t + 1));
+    const unsubLive = realtime.subscribe('LIVE_STREAM_STARTED', () => setSyncTick((t) => t + 1));
+    const unsubLiveStop = realtime.subscribe('LIVE_STREAM_STOPPED', () => setSyncTick((t) => t + 1));
+
+    return () => {
+      unsubProfile();
+      unsubLive();
+      unsubLiveStop();
+    };
+  }, []);
 
   const CATEGORIES = ['All', 'People', 'Posts', 'Reels', 'Tags'];
 
@@ -91,24 +111,6 @@ export const ExploreView = () => {
       (f) => !registeredMatches.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
     ),
   ];
-
-  // 4. Dynamic ID Resolution: If user entered an ID pattern (e.g. LK-12345 or digits like 12345) and no local record exists yet:
-  if (cleanQuery && (cleanNorm.startsWith('lk') || /^\d{4,6}$/.test(cleanNorm)) && combinedPeople.length === 0) {
-    const formattedId = cleanNorm.startsWith('lk')
-      ? `LK-${cleanNorm.slice(2).toUpperCase()}`
-      : `LK-${cleanNorm.toUpperCase()}`;
-
-    combinedPeople.unshift({
-      id: `remote-${formattedId.toLowerCase()}`,
-      name: `LinkUp Member`,
-      username: formattedId.toLowerCase(),
-      linkupId: formattedId,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-      isRegisteredUser: true,
-      isFollowing: false,
-      isDynamicMatch: true,
-    });
-  }
 
   // Filter Posts
   const filteredPosts = posts.filter((p) => {
@@ -245,22 +247,60 @@ export const ExploreView = () => {
           <div className="flex flex-col gap-2">
             {combinedPeople.slice(0, searchCategory === 'All' && !query ? 5 : 40).map((person) => {
               const isFollowed = person.isFollowing || followedIds[person.id];
+              const liveStream = activeLiveStreams.find(
+                (l) =>
+                  l.broadcasterId === person.id ||
+                  (l.linkupId && person.linkupId && l.linkupId.toLowerCase() === person.linkupId.toLowerCase())
+              );
+              const userStoryIndex = stories.findIndex(
+                (s) =>
+                  s.user?.id === person.id ||
+                  (s.user?.username && person.username && s.user.username.toLowerCase() === person.username.toLowerCase())
+              );
+              const hasStory = userStoryIndex >= 0;
 
               return (
                 <div
                   key={person.id}
                   className={`flex items-center justify-between p-3 rounded-2xl border transition-all gap-2 ${
-                    person.isDynamicMatch || query
+                    liveStream
+                      ? 'bg-gradient-to-r from-red-950/60 via-slate-900 to-purple-950/40 border-red-500/60 shadow-xl'
+                      : query
                       ? 'bg-gradient-to-r from-purple-950/50 via-slate-900 to-indigo-950/40 border-purple-500/60 shadow-lg'
                       : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <img
-                      src={person.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
-                      alt={person.name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-purple-500/50 flex-shrink-0 shadow"
-                    />
+                    {/* Interactive Avatar: click to view Live or Stories */}
+                    <div
+                      onClick={() => {
+                        if (liveStream) {
+                          watchLive(liveStream);
+                        } else if (hasStory) {
+                          setActiveStoryIndex(userStoryIndex);
+                        }
+                      }}
+                      className={`relative w-12 h-12 rounded-full p-0.5 flex-shrink-0 cursor-pointer transition-transform hover:scale-105 ${
+                        liveStream
+                          ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-slate-900 animate-pulse'
+                          : hasStory
+                          ? 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600'
+                          : 'border-2 border-purple-500/50'
+                      }`}
+                      title={liveStream ? 'Broadcasting LIVE! Click to watch' : hasStory ? 'Click to view story' : person.name}
+                    >
+                      <img
+                        src={person.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
+                        alt={person.name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                      {liveStream && (
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-red-600 rounded-md text-[7px] font-black text-white uppercase tracking-wider">
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="text-xs font-bold text-white truncate">{person.name}</h4>
@@ -269,12 +309,36 @@ export const ExploreView = () => {
                             {person.linkupId}
                           </span>
                         )}
+                        {liveStream && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[9px] font-black animate-pulse">
+                            🔴 In Live
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">@{person.username}</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {liveStream ? (
+                      <button
+                        type="button"
+                        onClick={() => watchLive(liveStream)}
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/40 flex items-center gap-1.5 active:scale-95 transition-all"
+                      >
+                        <Radio className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Watch Live</span>
+                      </button>
+                    ) : hasStory ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveStoryIndex(userStoryIndex)}
+                        className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
+                      >
+                        <span>Story</span>
+                      </button>
+                    ) : null}
+
                     <button
                       type="button"
                       onClick={() => openChatWithUser(person)}
@@ -282,7 +346,7 @@ export const ExploreView = () => {
                       title="Send Message"
                     >
                       <MessageCircle className="w-4 h-4 text-purple-400" />
-                      <span>Message</span>
+                      <span className="hidden sm:inline">Message</span>
                     </button>
 
                     <button

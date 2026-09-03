@@ -1,5 +1,8 @@
 import Peer from 'peerjs';
 
+const CLOUD_TOPIC = 'linkup_network_live_v2';
+const CLOUD_URL = `https://ntfy.sh/${CLOUD_TOPIC}`;
+
 export const formatPeerId = (idStr) => {
   if (!idStr) return 'lk-user';
   const clean = idStr.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^lk/, '');
@@ -16,8 +19,9 @@ class RealtimeService {
     this.activeCalls = new Map();
     this.localStream = null;
     this.isInitialized = false;
+    this.eventSource = null;
 
-    // Cross-tab / Cross-window broadcast channel for instant multi-user simulation
+    // 1. Cross-tab / Cross-window broadcast channel for local multi-user testing
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       this.channel = new BroadcastChannel('linkup_realtime_network');
       this.channel.onmessage = (event) => {
@@ -29,25 +33,118 @@ class RealtimeService {
     } else {
       this.channel = null;
     }
-  }
 
-  handleIncomingPayload(type, payload) {
-    // Automatically save discovered users into registered directory
-    if (type === 'USER_ONLINE' && payload && payload.username) {
-      try {
-        const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-        if (!savedDb.some((u) => u.username?.toLowerCase() === payload.username.toLowerCase())) {
-          savedDb.unshift(payload);
-          localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
-        }
-      } catch {}
+    // 2. Global Cloud Sync Relay (cross-device, cross-phone, zero-setup)
+    if (typeof window !== 'undefined') {
+      this.initCloudRelay();
     }
-
-    this.emit(type, payload);
   }
 
   /**
-   * Initialize PeerJS WebRTC with the user's LinkUp ID or username
+   * Connect to global cloud relay for 100% real-time multi-device sync
+   */
+  async initCloudRelay() {
+    // A. Fetch recent profile syncs and live broadcasts from the past 24 hours
+    try {
+      const res = await fetch(`${CLOUD_URL}/json?poll=1&since=24h`);
+      if (res.ok) {
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        lines.forEach((line) => {
+          try {
+            const data = JSON.parse(line);
+            if (data && data.message) {
+              const parsed = JSON.parse(data.message);
+              if (parsed.type && parsed.payload) {
+                this.handleIncomingPayload(parsed.type, parsed.payload, false);
+              }
+            }
+          } catch {}
+        });
+      }
+    } catch (e) {
+      console.warn('Cloud relay history poll fallback:', e);
+    }
+
+    // B. Real-time Server-Sent Events listener for instant live events
+    try {
+      if (typeof EventSource !== 'undefined') {
+        this.eventSource = new EventSource(`${CLOUD_URL}/sse`);
+        this.eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.message) {
+              const parsed = JSON.parse(data.message);
+              if (parsed.type && parsed.payload) {
+                this.handleIncomingPayload(parsed.type, parsed.payload, true);
+              }
+            }
+          } catch {}
+        };
+      }
+    } catch (e) {
+      console.warn('Cloud SSE subscription error:', e);
+    }
+  }
+
+  handleIncomingPayload(type, payload, triggerEmit = true) {
+    // 1. Sync User Profile across all devices
+    if (type === 'USER_PROFILE_SYNC' && payload && payload.username) {
+      try {
+        const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+        const idx = savedDb.findIndex(
+          (u) =>
+            (u.linkupId && payload.linkupId && u.linkupId.toLowerCase() === payload.linkupId.toLowerCase()) ||
+            u.username?.toLowerCase() === payload.username.toLowerCase()
+        );
+
+        if (idx >= 0) {
+          savedDb[idx] = { ...savedDb[idx], ...payload };
+        } else {
+          savedDb.unshift(payload);
+        }
+        localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+      } catch {}
+    }
+
+    // 2. Sync Live Streams across all devices
+    if (type === 'LIVE_STREAM_STARTED' && payload && payload.broadcasterId) {
+      try {
+        const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
+        const filtered = activeLives.filter((l) => l.broadcasterId !== payload.broadcasterId);
+        filtered.unshift(payload);
+        localStorage.setItem('linkup_active_live_streams', JSON.stringify(filtered));
+      } catch {}
+    }
+
+    if (type === 'LIVE_STREAM_STOPPED' && payload && payload.broadcasterId) {
+      try {
+        const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
+        const filtered = activeLives.filter((l) => l.broadcasterId !== payload.broadcasterId);
+        localStorage.setItem('linkup_active_live_streams', JSON.stringify(filtered));
+      } catch {}
+    }
+
+    if (triggerEmit) {
+      this.emit(type, payload);
+    }
+  }
+
+  /**
+   * Publish an event to the global cloud relay so all phones/devices receive it instantly
+   */
+  async publishToCloud(type, payload) {
+    try {
+      fetch(CLOUD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, payload }),
+      }).catch(() => {});
+    } catch {}
+  }
+
+  /**
+   * Initialize PeerJS WebRTC with the user's LinkUp ID
    */
   init(user) {
     if (!user || typeof window === 'undefined') return;
@@ -55,7 +152,20 @@ class RealtimeService {
     this.currentUser = user;
     const cleanId = formatPeerId(user.linkupId || user.username || user.id);
 
-    // If already connected with same ID, reuse
+    // Sync user profile to global cloud relay
+    this.publishToCloud('USER_PROFILE_SYNC', {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      linkupId: user.linkupId,
+      avatar: user.avatar,
+      bio: user.bio,
+      role: user.role,
+      work: user.work,
+      hometown: user.hometown,
+      highlights: user.highlights,
+    });
+
     if (this.peer && this.peerId === cleanId && !this.peer.destroyed) {
       return;
     }
@@ -80,7 +190,6 @@ class RealtimeService {
       this.peer.on('open', (id) => {
         this.isInitialized = true;
         this.emit('CONNECTED', { peerId: id });
-        // Announce presence across network
         this.broadcast('USER_ONLINE', {
           id: user.id,
           username: user.username,
@@ -91,12 +200,10 @@ class RealtimeService {
         });
       });
 
-      // Handle incoming data connections (direct messages, live reactions)
       this.peer.on('connection', (conn) => {
         this.setupConnection(conn);
       });
 
-      // Handle incoming media calls (watching a live video stream)
       this.peer.on('call', (call) => {
         this.activeCalls.set(call.peer, call);
         if (this.localStream) {
@@ -141,17 +248,19 @@ class RealtimeService {
       if (data && data.type) {
         if (data.type === 'WHO_ARE_YOU' && this.currentUser) {
           conn.send({
-            type: 'USER_ONLINE',
+            type: 'USER_PROFILE_SYNC',
             payload: {
               id: this.currentUser.id,
               name: this.currentUser.name,
               username: this.currentUser.username,
               linkupId: this.currentUser.linkupId,
               avatar: this.currentUser.avatar,
+              bio: this.currentUser.bio,
+              role: this.currentUser.role,
             },
           });
         }
-        this.handleIncomingPayload(data.type, data.payload);
+        this.handleIncomingPayload(data.type, data.payload, true);
       }
     });
 
@@ -164,9 +273,6 @@ class RealtimeService {
     });
   }
 
-  /**
-   * Subscribe to real-time events
-   */
   subscribe(eventType, callback) {
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, new Set());
@@ -194,20 +300,20 @@ class RealtimeService {
     }
   }
 
-  /**
-   * Broadcast an event to all tabs/devices
-   */
   broadcast(type, payload) {
     this.emit(type, payload);
 
+    // 1. Broadcast locally across tabs
     if (this.channel) {
       try {
         this.channel.postMessage({ type, payload });
-      } catch (err) {
-        console.warn('Channel postMessage error:', err);
-      }
+      } catch (err) {}
     }
 
+    // 2. Broadcast to global cloud relay so all other devices receive it
+    this.publishToCloud(type, payload);
+
+    // 3. Broadcast across direct WebRTC data connections
     this.activeConnections.forEach((conn) => {
       if (conn.open) {
         conn.send({ type, payload });
@@ -216,7 +322,7 @@ class RealtimeService {
   }
 
   /**
-   * Send a direct message to a specific user
+   * Send a direct message to a user across the global cloud & WebRTC
    */
   sendDirectMessage(recipient, message) {
     const payload = {
@@ -227,8 +333,10 @@ class RealtimeService {
       timestamp: Date.now(),
     };
 
+    // Broadcasts across local tabs + global cloud relay
     this.broadcast('NEW_DIRECT_MESSAGE', payload);
 
+    // Direct WebRTC channel
     const targetPeerId = formatPeerId(recipient.linkupId || recipient.username || recipient.id);
 
     if (this.peer && targetPeerId && targetPeerId !== this.peerId) {
@@ -291,7 +399,7 @@ class RealtimeService {
   }
 
   /**
-   * Join and watch another user's live stream
+   * Join and watch another user's live stream via WebRTC or cloud
    */
   watchLiveStream(broadcasterPeerId, onStreamCallback) {
     if (!this.peer || !broadcasterPeerId) return null;
@@ -324,6 +432,9 @@ class RealtimeService {
     }
     if (this.channel) {
       this.channel.close();
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
     }
     this.listeners.clear();
   }

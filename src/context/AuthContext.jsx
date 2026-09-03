@@ -46,18 +46,19 @@ export const calculatePasswordStrength = (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
+  // No default logged-in account — starts with null so the signup screen is shown on open
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('linkup_auth_user');
-    return saved ? JSON.parse(saved) : CURRENT_USER;
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('linkup_auth_user') || true;
+    return !!localStorage.getItem('linkup_auth_user');
   });
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [googleAuthModalOpen, setGoogleAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup' | 'forgot'
+  const [authMode, setAuthMode] = useState('signup'); // Default to signup mode
 
   useEffect(() => {
     if (user) {
@@ -138,37 +139,27 @@ export const AuthProvider = ({ children }) => {
       coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
       bio: 'Excited to be on LinkUp! Connecting, sharing, and listening to regional tunes 🎶',
       role: 'LinkUp Creator',
-      subtitle: 'New Community Member',
+      work: 'Student / Creator',
+      education: 'Computer Science & Engineering',
+      location: 'Karnataka, India',
       website: `linkup.dev/${effectiveUsername}`,
-      work: 'LinkUp Member',
-      education: '',
-      hometown: 'Bengaluru, India',
-      relationshipStatus: 'Single',
-      joinedDate: 'Joined Today',
       postsCount: 0,
-      friendsCount: 0,
-      followingCount: 0,
-      twoFactorEnabled: false,
+      friendsCount: 1,
+      followingCount: 5,
       highlights: [
-        { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80' },
-        { id: 'hl-2', name: 'Music', icon: '🎵', color: 'border-purple-500/80' },
+        { id: 'hl-1', name: 'Life 🌴', icon: '🌴', color: 'border-emerald-500/80', stories: [] },
+        { id: 'hl-2', name: 'Vibes 🎵', icon: '🎵', color: 'border-purple-500/80', stories: [] },
       ],
       gallery: [
-        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&q=80',
-        'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&q=80',
+        'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=80',
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80',
+        'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
       ],
-      privacy: {
-        work: 'Public',
-        education: 'Friends',
-        hometown: 'Public',
-        relationship: 'Only Me',
-        postsDefault: 'Public',
-      },
     };
 
     // Save to registered accounts list in localStorage
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    savedDb.unshift(newUser);
+    savedDb.push(newUser);
     localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
 
     setUser(newUser);
@@ -178,75 +169,45 @@ export const AuthProvider = ({ children }) => {
     return newUser;
   };
 
-  // Google OAuth Login with custom or default Gmail
-  const loginWithGoogle = (customEmail = null, customName = null, customAvatar = null) => {
-    const email = (customEmail || 'amruth.sai@gmail.com').trim().toLowerCase();
-    const name = customName || email.split('@')[0].replace(/[._]/g, ' ');
-    const username = email.split('@')[0].toLowerCase().replace(/\s+/g, '.');
+  // Google OAuth simulation
+  const loginWithGoogle = (googleUserData) => {
+    const email = googleUserData?.email || 'ashok.lingaraddi.dev@gmail.com';
+    const name = googleUserData?.name || 'Ashok Lingaraddi';
+    const avatar =
+      googleUserData?.picture ||
+      `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&q=80`;
 
-    const googleUser = {
+    const newUser = {
+      ...CURRENT_USER,
       id: `google-${Date.now()}`,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      username: username,
-      email: email,
-      avatar: customAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-      coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
-      bio: `Signed in via Google account (${email}) 🌟`,
-      role: 'Verified Google User',
-      subtitle: 'LinkUp Member',
-      website: `linkup.dev/${username}`,
-      work: 'Verified Google Account',
-      education: '',
-      hometown: 'Bengaluru, India',
-      relationshipStatus: 'Single',
-      joinedDate: 'Joined Today',
-      postsCount: 0,
-      friendsCount: 5,
-      followingCount: 12,
-      twoFactorEnabled: false,
-      highlights: [
-        { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80' },
-      ],
-      gallery: [],
-      privacy: {
-        work: 'Public',
-        education: 'Friends',
-        hometown: 'Public',
-        relationship: 'Only Me',
-        postsDefault: 'Public',
-      },
+      name,
+      username: email.split('@')[0].toLowerCase(),
+      email,
+      avatar,
+      authProvider: 'google',
     };
 
-    // Save to registered database
-    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    savedDb.unshift(googleUser);
-    localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
-
-    setUser(googleUser);
+    setUser(newUser);
     setIsAuthenticated(true);
-    setAuthModalOpen(false);
     setGoogleAuthModalOpen(false);
-    return googleUser;
+    setAuthModalOpen(false);
+    return newUser;
   };
 
+  // Logout
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('linkup_auth_user');
   };
 
+  // Update profile
   const updateUserProfile = (updatedFields) => {
-    setUser((prev) => ({
-      ...prev,
-      ...updatedFields,
-    }));
-  };
-
-  const toggle2FA = () => {
-    setUser((prev) => ({
-      ...prev,
-      twoFactorEnabled: !prev?.twoFactorEnabled,
-    }));
+    setUser((prev) => {
+      const updated = { ...(prev || CURRENT_USER), ...updatedFields };
+      localStorage.setItem('linkup_auth_user', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
@@ -265,7 +226,6 @@ export const AuthProvider = ({ children }) => {
         loginWithGoogle,
         logout,
         updateUserProfile,
-        toggle2FA,
       }}
     >
       {children}

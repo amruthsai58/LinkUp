@@ -27,7 +27,9 @@ export const SocialProvider = ({ children }) => {
   const { user } = useAuth();
 
   // Active Screen View: 'home' | 'search' | 'reels' | 'messages' | 'chat_direct' | 'notifications' | 'profile' | 'menu' | 'auth_welcome'
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState(() => {
+    return user ? 'home' : 'auth_welcome';
+  });
   const [viewMode, setViewMode] = useState('app'); // 'app' (Mobile Phone UI matching screenshot) | 'desktop' (Expanded Web Layout)
   const [activeScreenIndex, setActiveScreenIndex] = useState(2); // 1 to 10 for direct screen jumping
 

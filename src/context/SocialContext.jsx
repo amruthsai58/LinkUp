@@ -27,15 +27,37 @@ export const SocialProvider = ({ children }) => {
   const { user } = useAuth();
 
   // Active Screen View: 'home' | 'search' | 'reels' | 'messages' | 'chat_direct' | 'notifications' | 'profile' | 'menu' | 'auth_welcome'
-  const [activeTab, setActiveTab] = useState(() => (user ? 'home' : 'auth_welcome'));
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedTab = localStorage.getItem('linkup_active_tab');
+      if (user && savedTab && savedTab !== 'auth_welcome') {
+        return savedTab;
+      }
+    } catch {}
+    return user ? 'home' : 'auth_welcome';
+  });
   const [viewMode, setViewMode] = useState('app'); // 'app' (Mobile Phone UI matching screenshot) | 'desktop' (Expanded Web Layout)
   const [activeScreenIndex, setActiveScreenIndex] = useState(2); // 1 to 10 for direct screen jumping
 
+  // Ensure activeTab stays in sync and preserves current view (e.g. profile) across reloads
   useEffect(() => {
     if (!user) {
       setActiveTab('auth_welcome');
+    } else {
+      if (activeTab === 'auth_welcome') {
+        try {
+          const savedTab = localStorage.getItem('linkup_active_tab');
+          setActiveTab(savedTab && savedTab !== 'auth_welcome' ? savedTab : 'home');
+        } catch {
+          setActiveTab('home');
+        }
+      } else {
+        try {
+          localStorage.setItem('linkup_active_tab', activeTab);
+        } catch {}
+      }
     }
-  }, [user]);
+  }, [user, activeTab]);
 
   const [feedMode, setFeedMode] = useState('algorithmic'); // 'algorithmic' | 'chronological'
   const [posts, setPosts] = useState(INITIAL_POSTS);

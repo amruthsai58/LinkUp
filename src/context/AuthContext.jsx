@@ -76,12 +76,16 @@ export const AuthProvider = ({ children }) => {
 
   // Persist logged-in user session safely
   useEffect(() => {
-    if (user) {
-      localStorage.setItem('linkup_auth_user', JSON.stringify(user));
-      setIsAuthenticated(true);
-    } else {
-      localStorage.removeItem('linkup_auth_user');
-      setIsAuthenticated(false);
+    try {
+      if (user) {
+        localStorage.setItem('linkup_auth_user', JSON.stringify(user));
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('linkup_auth_user');
+        setIsAuthenticated(false);
+      }
+    } catch (err) {
+      console.warn('Session persistence error:', err);
     }
   }, [user]);
 
@@ -262,7 +266,11 @@ export const AuthProvider = ({ children }) => {
       const updated = { ...prev, ...updatedFields };
 
       // Persist immediately to active session in localStorage
-      localStorage.setItem('linkup_auth_user', JSON.stringify(updated));
+      try {
+        localStorage.setItem('linkup_auth_user', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Error saving updated session:', err);
+      }
 
       // Persist to registered users database matching by id, username, or email
       try {

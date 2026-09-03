@@ -1,13 +1,13 @@
 /**
  * Converts a file to an optimized permanent Base64 Data URL
- * Ensures the image never expires or gets removed upon reload or re-login
+ * Ensures the image never expires and fits safely within localStorage quota limits
  * @param {File} file - User uploaded image file
- * @param {number} maxWidth - Maximum width for optimization
- * @param {number} maxHeight - Maximum height for optimization
- * @param {number} quality - JPEG compression quality (0.0 to 1.0)
+ * @param {number} maxWidth - Maximum width for optimization (default 250px for fast, lightweight storage)
+ * @param {number} maxHeight - Maximum height for optimization (default 250px)
+ * @param {number} quality - JPEG compression quality (0.0 to 1.0, default 0.75)
  * @returns {Promise<string>} Permanent Base64 Data URL
  */
-export const fileToBase64 = (file, maxWidth = 500, maxHeight = 500, quality = 0.85) => {
+export const fileToBase64 = (file, maxWidth = 250, maxHeight = 250, quality = 0.75) => {
   return new Promise((resolve, reject) => {
     if (!file) {
       resolve('');
@@ -15,7 +15,7 @@ export const fileToBase64 = (file, maxWidth = 500, maxHeight = 500, quality = 0.
     }
 
     // For non-image files or if FileReader isn't supported
-    if (!file.type.startsWith('image')) {
+    if (!file.type || !file.type.startsWith('image')) {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = (error) => reject(error);
@@ -49,11 +49,16 @@ export const fileToBase64 = (file, maxWidth = 500, maxHeight = 500, quality = 0.
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        } catch {
+          // Fallback to lower quality if needed
+          const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          resolve(fallbackDataUrl);
+        }
       };
       img.onerror = () => {
-        // Fallback to direct dataURL if canvas fails
         resolve(readerEvent.target.result);
       };
       img.src = readerEvent.target.result;

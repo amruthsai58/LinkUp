@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Camera,
@@ -32,6 +32,20 @@ export const EditProfileModal = ({ isOpen, onClose }) => {
   const [hometown, setHometown] = useState(activeUser.hometown || 'Bengaluru, India');
   const [avatar, setAvatar] = useState(activeUser.avatar || CURRENT_USER.avatar);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Synchronize modal state with active user data whenever opened
+  useEffect(() => {
+    if (isOpen) {
+      setName(activeUser.name || '');
+      setUsername(activeUser.username || '');
+      setRole(activeUser.role || activeUser.work || 'Computer Science Student');
+      setSubtitle(activeUser.subtitle || 'Java Developer | Problem Solver');
+      setBio(activeUser.bio || '');
+      setWebsite(activeUser.website || `linkup.dev/${activeUser.username}`);
+      setHometown(activeUser.hometown || 'Bengaluru, India');
+      setAvatar(activeUser.avatar || CURRENT_USER.avatar);
+    }
+  }, [isOpen, activeUser]);
 
   if (!isOpen) return null;
 

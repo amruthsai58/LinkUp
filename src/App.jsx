@@ -31,7 +31,7 @@ const MainAppContent = () => {
   const isUserAuthenticated = isAuthenticated && !!user;
 
   const renderActiveScreen = () => {
-    if (!isUserAuthenticated || activeTab === 'auth_welcome') {
+    if (!isUserAuthenticated) {
       return <WelcomeScreen />;
     }
 

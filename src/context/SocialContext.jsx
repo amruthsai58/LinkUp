@@ -208,23 +208,38 @@ export const SocialProvider = ({ children }) => {
   };
 
   // Add 24-hour Story
-  const addStory = ({ mediaUrl, caption = '', musicTrackId = null }) => {
+  const addStory = ({ mediaUrl, caption = '', musicTrackId = null, privacy = 'Public', hiddenFromUserIds = [] }) => {
     const newStory = {
       id: `story-${Date.now()}`,
       user: {
-        id: user?.id || CURRENT_USER.id,
-        name: 'Your Story',
-        avatar: user?.avatar || CURRENT_USER.avatar,
+        id: user?.id || 'current-user',
+        name: user?.name ? `${user.name} (You)` : 'Your Story',
+        avatar: user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80',
+        isOwner: true,
       },
       mediaUrl,
       caption,
       musicTrackId,
+      privacy,
+      hiddenFromUserIds,
       timestamp: 'Just now',
       viewersCount: 1,
     };
 
     setStories((prev) => [newStory, ...prev]);
     setCreateStoryOpen(false);
+  };
+
+  // Delete Story
+  const deleteStory = (storyId) => {
+    setStories((prev) => prev.filter((s) => s.id !== storyId));
+  };
+
+  // Update Story Privacy & Hide from users
+  const updateStoryPrivacy = (storyId, { privacy, hiddenFromUserIds = [] }) => {
+    setStories((prev) =>
+      prev.map((s) => (s.id === storyId ? { ...s, privacy, hiddenFromUserIds } : s))
+    );
   };
 
   // Toggle friend follow
@@ -412,6 +427,8 @@ export const SocialProvider = ({ children }) => {
         addComment,
         sharePost,
         addStory,
+        deleteStory,
+        updateStoryPrivacy,
         toggleFollowFriend,
         handleFriendRequest,
         sendDirectMessage,

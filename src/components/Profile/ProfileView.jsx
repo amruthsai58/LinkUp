@@ -34,6 +34,7 @@ export const ProfileView = () => {
     setViewingUser,
     toggleFollowFriend,
     friends,
+    posts,
     openChatWithUser,
     activeLiveStreams,
     watchLive,
@@ -96,6 +97,46 @@ export const ProfileView = () => {
       localStorage.setItem('linkup_following_usernames', JSON.stringify(updated));
     } catch {}
   };
+
+  // 1. Dynamic Posts Calculation
+  const myPosts = posts.filter(
+    (p) =>
+      p.author?.id === user.id ||
+      (p.author?.username && user.username && p.author.username.toLowerCase() === user.username.toLowerCase()) ||
+      (authUser && p.author?.username && p.author.username.toLowerCase() === authUser.username?.toLowerCase())
+  );
+  const friendPosts = posts.filter(
+    (p) => p.author?.username && user.username && p.author.username.toLowerCase() === user.username.toLowerCase()
+  );
+  const displayedPostsCount = isMyProfile
+    ? myPosts.length
+    : (friendPosts.length > 0 ? friendPosts.length : (user.postsCount ?? 0));
+
+  // 2. Dynamic Following Calculation
+  const activeFollowedKeys = Object.keys(followedUsers).filter((k) => followedUsers[k]);
+  const followedFriends = friends.filter((f) => f.isFollowing);
+  const combinedFollowingSet = new Set([
+    ...activeFollowedKeys,
+    ...followedFriends.map((f) => f.username?.toLowerCase() || f.id),
+  ]);
+  const dynamicFollowingCount = isMyProfile
+    ? combinedFollowingSet.size
+    : (user.followingCount ?? (user.isFollowing ? 1 : 0));
+
+  // 3. Dynamic Followers Calculation
+  const confirmedFriendsCount = friends.filter((f) => f.isFriend).length;
+  const pendingRequestsCount = friends.filter((f) => f.hasPendingRequest).length;
+  const myFollowersCount = (user.followersCount ?? 0) + confirmedFriendsCount + pendingRequestsCount;
+  const friendFollowersCount = (user.followersCount ?? 0) + (isFriendFollowed ? 1 : 0);
+  const displayedFollowersCount = isMyProfile ? myFollowersCount : friendFollowersCount;
+
+  // 4. Dynamic Gallery Images
+  const postImages = (isMyProfile ? myPosts : friendPosts)
+    .map((p) => p.image)
+    .filter(Boolean);
+  const displayedGalleryImages = postImages.length > 0
+    ? [...postImages, ...(user.gallery || CURRENT_USER.gallery || [])]
+    : (user.gallery || CURRENT_USER.gallery || []);
 
   // Check if user is currently streaming live
   const liveStreamObj = activeLiveStreams?.find(
@@ -224,20 +265,20 @@ export const ProfileView = () => {
             )}
           </div>
 
-          {/* 3 Stats Columns */}
+          {/* 3 Stats Columns: Dynamic Posts, Followers & Following */}
           <div className="flex-1 flex items-center justify-around text-center">
             <div className="cursor-pointer hover:opacity-80">
-              <span className="block text-base sm:text-lg font-black text-white">{user.postsCount ?? 42}</span>
+              <span className="block text-base sm:text-lg font-black text-white">{displayedPostsCount}</span>
               <span className="text-[11px] text-slate-400 font-medium">Posts</span>
             </div>
 
             <div className="cursor-pointer hover:opacity-80">
-              <span className="block text-base sm:text-lg font-black text-white">{user.friendsCount ?? 842}</span>
-              <span className="text-[11px] text-slate-400 font-medium">Friends</span>
+              <span className="block text-base sm:text-lg font-black text-white">{displayedFollowersCount}</span>
+              <span className="text-[11px] text-slate-400 font-medium">Followers</span>
             </div>
 
             <div className="cursor-pointer hover:opacity-80">
-              <span className="block text-base sm:text-lg font-black text-white">{user.followingCount ?? 126}</span>
+              <span className="block text-base sm:text-lg font-black text-white">{dynamicFollowingCount}</span>
               <span className="text-[11px] text-slate-400 font-medium">Following</span>
             </div>
           </div>
@@ -479,7 +520,7 @@ export const ProfileView = () => {
 
         {/* 3-Column Photo Grid */}
         <div className="grid grid-cols-3 gap-1 px-0.5">
-          {(user.gallery || CURRENT_USER.gallery).map((imgUrl, idx) => (
+          {displayedGalleryImages.map((imgUrl, idx) => (
             <div
               key={idx}
               className="relative aspect-square bg-slate-800 overflow-hidden cursor-pointer group"

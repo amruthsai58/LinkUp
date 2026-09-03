@@ -61,7 +61,23 @@ export const SocialProvider = ({ children }) => {
   }, [user, activeTab]);
 
   const [feedMode, setFeedMode] = useState('algorithmic');
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  const [posts, setPosts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('linkup_posts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_POSTS;
+  });
+
+  // Persist posts to localStorage so new user posts never disappear after refresh
+  useEffect(() => {
+    try {
+      localStorage.setItem('linkup_posts', JSON.stringify(posts));
+    } catch {}
+  }, [posts]);
   const [friends, setFriends] = useState(INITIAL_FRIENDS);
   const [stories, setStories] = useState(INITIAL_STORIES);
   const [reels, setReels] = useState(INITIAL_REELS);

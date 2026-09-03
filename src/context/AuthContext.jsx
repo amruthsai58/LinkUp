@@ -46,19 +46,18 @@ export const calculatePasswordStrength = (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  // No default logged-in account — starts with null so the signup screen is shown on open
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('linkup_auth_user');
-    return saved ? JSON.parse(saved) : null;
+    return saved ? JSON.parse(saved) : CURRENT_USER;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('linkup_auth_user');
+    return !!localStorage.getItem('linkup_auth_user') || true;
   });
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [googleAuthModalOpen, setGoogleAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('signup'); // Default to signup mode
+  const [authMode, setAuthMode] = useState('signup');
 
   useEffect(() => {
     if (user) {

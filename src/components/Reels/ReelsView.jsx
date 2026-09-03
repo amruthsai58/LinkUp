@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useMusic } from '../../context/MusicContext';
+import { useAuth } from '../../context/AuthContext';
 import { INITIAL_REELS } from '../../data/mockSocialData';
 
 export const ReelsView = () => {
+  const { user } = useAuth();
   const { reels: contextReels, setCreateStoryOpen } = useSocial();
   const { stopAudio } = useMusic();
 
@@ -111,7 +113,7 @@ export const ReelsView = () => {
     if (!newComment.trim()) return;
     setCommentsList((prev) => [
       ...prev,
-      { id: `rc-${Date.now()}`, author: 'Ashok Lingaraddi', text: newComment, time: 'Just now' },
+      { id: `rc-${Date.now()}`, author: user?.name || 'LinkUp User', text: newComment, time: 'Just now' },
     ]);
     setNewComment('');
   };

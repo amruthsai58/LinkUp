@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { MusicProvider } from './context/MusicContext';
 import { SocialProvider, useSocial } from './context/SocialContext';
 
@@ -24,13 +24,18 @@ import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
 
 const MainAppContent = () => {
   const { activeTab } = useSocial();
+  const { user, isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
 
-  // Active view renderer
+  // If user is not authenticated, strictly show Sign Up / Log In screen
+  const isUserAuthenticated = isAuthenticated && !!user;
+
   const renderActiveScreen = () => {
+    if (!isUserAuthenticated || activeTab === 'auth_welcome') {
+      return <WelcomeScreen />;
+    }
+
     switch (activeTab) {
-      case 'auth_welcome':
-        return <WelcomeScreen />;
       case 'home':
         return <Feed />;
       case 'search':
@@ -57,16 +62,16 @@ const MainAppContent = () => {
       {/* Animated Brand Splash Screen (Plays on every page load/open) */}
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
-      {/* Top Navbar with LinkUp logo and notifications/messages */}
-      <Navbar />
+      {/* Top Navbar with LinkUp logo */}
+      {isUserAuthenticated && <Navbar />}
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-2xl mx-auto px-2 sm:px-4 pt-2 flex flex-col justify-start">
         {renderActiveScreen()}
       </main>
 
-      {/* Persistent Bottom 5-Icon Navigation Bar */}
-      {activeTab !== 'auth_welcome' && <BottomNavBar />}
+      {/* Persistent Bottom 5-Icon Navigation Bar (Only for authenticated users) */}
+      {isUserAuthenticated && activeTab !== 'auth_welcome' && <BottomNavBar />}
 
       {/* Interactive Overlays */}
       <AuthModal />

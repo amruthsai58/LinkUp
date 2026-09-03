@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { CURRENT_USER } from '../data/mockSocialData';
 
 const AuthContext = createContext();
 
@@ -46,10 +45,14 @@ export const calculatePasswordStrength = (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  // No default logged-in account — starts as null unless explicitly logged in
+  // Pure dynamic authentication - no default account
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('linkup_auth_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('linkup_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -63,27 +66,21 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (user) {
       localStorage.setItem('linkup_auth_user', JSON.stringify(user));
+      setIsAuthenticated(true);
     } else {
       localStorage.removeItem('linkup_auth_user');
+      setIsAuthenticated(false);
     }
   }, [user]);
 
-  // Login accepting username OR email OR credentials
+  // Strict Login: checks registered database
   const login = (identifier, password) => {
-    if (typeof identifier === 'object' && identifier !== null) {
-      setUser(identifier);
-      setIsAuthenticated(true);
-      setAuthModalOpen(false);
-      setGoogleAuthModalOpen(false);
-      return identifier;
-    }
-
     const cleanIdentifier = (identifier || '').trim();
     if (!cleanIdentifier) {
       throw new Error('Please enter your email or username');
     }
 
-    // Check registered accounts list in localStorage
+    // Check registered accounts in localStorage
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
     const foundUser = savedDb.find(
       (u) =>
@@ -91,60 +88,64 @@ export const AuthProvider = ({ children }) => {
         u.email?.toLowerCase() === cleanIdentifier.toLowerCase()
     );
 
-    if (foundUser) {
-      setUser(foundUser);
-      setIsAuthenticated(true);
-      setAuthModalOpen(false);
-      setGoogleAuthModalOpen(false);
-      return foundUser;
+    if (!foundUser) {
+      throw new Error('No account found with this email/username. Please create an account first.');
     }
 
-    // Synthesized account from identifier
-    const isEmail = cleanIdentifier.includes('@');
-    const derivedName = isEmail
-      ? cleanIdentifier.split('@')[0].replace(/[._]/g, ' ')
-      : cleanIdentifier;
-    const derivedUsername = isEmail
-      ? cleanIdentifier.split('@')[0].toLowerCase()
-      : cleanIdentifier.toLowerCase().replace(/\s+/g, '.');
+    if (foundUser.password && password && foundUser.password !== password) {
+      throw new Error('Incorrect password. Please try again.');
+    }
 
-    const newUser = {
-      ...CURRENT_USER,
-      id: `user-${Date.now()}`,
-      name: derivedName.charAt(0).toUpperCase() + derivedName.slice(1),
-      username: derivedUsername,
-      email: isEmail ? cleanIdentifier : `${cleanIdentifier.toLowerCase()}@gmail.com`,
-    };
-
-    setUser(newUser);
+    setUser(foundUser);
     setIsAuthenticated(true);
     setAuthModalOpen(false);
     setGoogleAuthModalOpen(false);
-    return newUser;
+    return foundUser;
   };
 
-  // Signup with full fallbacks
+  // Sign Up: creates and saves new user profile
   const signup = ({ name, username, email, password, dob, gender, avatar }) => {
-    const effectiveName = (name || username || 'New LinkUp User').trim();
-    const effectiveUsername = (username || effectiveName.toLowerCase().replace(/\s+/g, '.') || `user_${Date.now().toString().slice(-4)}`).trim().toLowerCase();
-    const effectiveEmail = (email || `${effectiveUsername}@gmail.com`).trim().toLowerCase();
-    const effectivePassword = password || 'Linkup@2026';
+    const cleanName = (name || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanUsername = (username || cleanName.toLowerCase().replace(/\s+/g, '.') || `user_${Date.now().toString().slice(-4)}`).trim().toLowerCase();
+
+    if (!cleanName) {
+      throw new Error('Please enter your full name');
+    }
+    if (!cleanEmail) {
+      throw new Error('Please enter your email address');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters');
+    }
+
+    // Check if email or username already registered
+    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+    const existing = savedDb.find(
+      (u) =>
+        u.email?.toLowerCase() === cleanEmail ||
+        u.username?.toLowerCase() === cleanUsername
+    );
+
+    if (existing) {
+      throw new Error('An account with this email or username already exists. Please log in.');
+    }
 
     const newUser = {
       id: `user-${Date.now()}`,
-      name: effectiveName,
-      username: effectiveUsername,
-      email: effectiveEmail,
-      password: effectivePassword,
+      name: cleanName,
+      username: cleanUsername,
+      email: cleanEmail,
+      password: password,
       dob: dob || '2003-01-01',
       gender: gender || 'Not specified',
       avatar: avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80`,
       coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
-      bio: 'Excited to be on LinkUp! Connecting, sharing, and listening to regional tunes 🎶',
+      bio: 'Excited to be on LinkUp! Connecting, sharing, and discovering music 🎶',
       role: 'LinkUp Member',
       subtitle: 'Creator',
-      website: `linkup.dev/${effectiveUsername}`,
-      work: 'LinkUp Member',
+      website: `linkup.dev/${cleanUsername}`,
+      work: 'LinkUp Community',
       education: '',
       hometown: 'Bengaluru, India',
       relationshipStatus: 'Single',
@@ -154,62 +155,8 @@ export const AuthProvider = ({ children }) => {
       followingCount: 0,
       twoFactorEnabled: false,
       highlights: [
-        { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80' },
-        { id: 'hl-2', name: 'Music', icon: '🎵', color: 'border-purple-500/80' },
-      ],
-      gallery: [
-        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&q=80',
-        'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&q=80',
-      ],
-      privacy: {
-        work: 'Public',
-        education: 'Friends',
-        hometown: 'Public',
-        relationship: 'Only Me',
-        postsDefault: 'Public',
-      },
-    };
-
-    // Save to registered accounts list in localStorage
-    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    savedDb.unshift(newUser);
-    localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
-
-    setUser(newUser);
-    setIsAuthenticated(true);
-    setAuthModalOpen(false);
-    setGoogleAuthModalOpen(false);
-    return newUser;
-  };
-
-  // Google OAuth Login
-  const loginWithGoogle = (customEmail = null, customName = null, customAvatar = null) => {
-    const email = (customEmail || 'user@gmail.com').trim().toLowerCase();
-    const name = customName || email.split('@')[0].replace(/[._]/g, ' ');
-    const username = email.split('@')[0].toLowerCase().replace(/\s+/g, '.');
-
-    const googleUser = {
-      id: `google-${Date.now()}`,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      username: username,
-      email: email,
-      avatar: customAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-      coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
-      bio: `Signed in via Google account (${email}) 🌟`,
-      role: 'Verified Google User',
-      subtitle: 'LinkUp Member',
-      website: `linkup.dev/${username}`,
-      work: 'Verified Google Account',
-      education: '',
-      hometown: 'Bengaluru, India',
-      relationshipStatus: 'Single',
-      joinedDate: 'Joined Today',
-      postsCount: 0,
-      friendsCount: 5,
-      followingCount: 12,
-      twoFactorEnabled: false,
-      highlights: [
-        { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80' },
+        { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80', stories: [] },
+        { id: 'hl-2', name: 'Music', icon: '🎵', color: 'border-purple-500/80', stories: [] },
       ],
       gallery: [],
       privacy: {
@@ -221,9 +168,65 @@ export const AuthProvider = ({ children }) => {
       },
     };
 
-    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    savedDb.unshift(googleUser);
+    savedDb.unshift(newUser);
     localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+
+    setUser(newUser);
+    setIsAuthenticated(true);
+    setAuthModalOpen(false);
+    setGoogleAuthModalOpen(false);
+    return newUser;
+  };
+
+  // Google OAuth Signup / Login
+  const loginWithGoogle = (customEmail = null, customName = null, customAvatar = null) => {
+    const email = (customEmail || '').trim().toLowerCase();
+    if (!email) {
+      throw new Error('Please enter a valid Google email address');
+    }
+
+    const name = customName || email.split('@')[0].replace(/[._]/g, ' ');
+    const username = email.split('@')[0].toLowerCase().replace(/\s+/g, '.');
+
+    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+    let googleUser = savedDb.find((u) => u.email?.toLowerCase() === email);
+
+    if (!googleUser) {
+      googleUser = {
+        id: `google-${Date.now()}`,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        username: username,
+        email: email,
+        avatar: customAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+        coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
+        bio: `Signed in via Google account (${email}) 🌟`,
+        role: 'Verified Google User',
+        subtitle: 'LinkUp Member',
+        website: `linkup.dev/${username}`,
+        work: 'Verified Google Account',
+        education: '',
+        hometown: 'Bengaluru, India',
+        relationshipStatus: 'Single',
+        joinedDate: 'Joined Today',
+        postsCount: 0,
+        friendsCount: 0,
+        followingCount: 0,
+        twoFactorEnabled: false,
+        highlights: [
+          { id: 'hl-1', name: 'Life', icon: '🌴', color: 'border-emerald-500/80', stories: [] },
+        ],
+        gallery: [],
+        privacy: {
+          work: 'Public',
+          education: 'Friends',
+          hometown: 'Public',
+          relationship: 'Only Me',
+          postsDefault: 'Public',
+        },
+      };
+      savedDb.unshift(googleUser);
+      localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+    }
 
     setUser(googleUser);
     setIsAuthenticated(true);
@@ -239,10 +242,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUserProfile = (updatedFields) => {
-    setUser((prev) => ({
-      ...prev,
-      ...updatedFields,
-    }));
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedFields };
+      // Also update in registered users database
+      const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      const newDb = savedDb.map((u) => (u.id === prev.id ? updated : u));
+      localStorage.setItem('linkup_registered_users', JSON.stringify(newDb));
+      return updated;
+    });
   };
 
   const toggle2FA = () => {

@@ -33,8 +33,8 @@ export const AuthModal = () => {
   const { setActiveTab } = useSocial();
 
   // Login form state
-  const [identifier, setIdentifier] = useState('ashok.lingaraddi');
-  const [password, setPassword] = useState('Linkup@2026');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Signup form state
@@ -205,7 +205,7 @@ export const AuthModal = () => {
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. ashok.lingaraddi or yourname@gmail.com"
+                  placeholder="e.g. your username or name@gmail.com"
                   className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-100 text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 />
               </div>
@@ -235,7 +235,7 @@ export const AuthModal = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -245,9 +245,10 @@ export const AuthModal = () => {
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 w-full py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 hover:opacity-95 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-purple-600/30 transition-all hover:scale-[1.01] active:scale-[0.98]"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
             >
-              {loading ? 'Signing In...' : 'Sign In to LinkUp'}
+              <span>{loading ? 'Logging In...' : 'Log In'}</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
 
             {/* Google OAuth Button */}

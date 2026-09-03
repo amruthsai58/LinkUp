@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Trash2, Camera, Plus, Check, Sparkles, Image as ImageIcon, Video } from 'lucide-react';
+import { fileToBase64 } from '../../utils/imageUtils';
 
 export const EditHighlightModal = ({ highlight, isOpen, onClose, onUpdateHighlight, onDeleteHighlight }) => {
   const fileInputRef = useRef(null);
@@ -21,24 +22,29 @@ export const EditHighlightModal = ({ highlight, isOpen, onClose, onUpdateHighlig
     { label: 'Orange', class: 'border-orange-500/80', bg: 'from-orange-500 to-amber-500' },
   ];
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    files.forEach((file) => {
+    for (const file of files) {
       const isVideo = file.type.startsWith('video');
-      const objectUrl = URL.createObjectURL(file);
+      let finalUrl;
+      if (isVideo) {
+        finalUrl = URL.createObjectURL(file);
+      } else {
+        finalUrl = await fileToBase64(file, 800, 1000, 0.85);
+      }
       setStories((prev) => [
         ...prev,
         {
           id: `story-${Date.now()}-${Math.random()}`,
-          url: objectUrl,
+          url: finalUrl,
           type: isVideo ? 'video' : 'image',
           caption: `Added to ${name || highlight.name}`,
           time: 'Just now',
         },
       ]);
-    });
+    }
     e.target.value = '';
   };
 

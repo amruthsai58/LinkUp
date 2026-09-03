@@ -1,19 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, Sparkles } from 'lucide-react';
 import { LogoSymbol } from '../Common/Logo';
 
 export const SplashScreen = ({ onFinish }) => {
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [soundPlayed, setSoundPlayed] = useState(false);
   const audioContextRef = useRef(null);
 
   // Futuristic Web Audio Synthesizer for rich cinematic startup chime
   const playStartupChime = () => {
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
 
-      const ctx = new AudioContext();
-      audioContextRef.current = ctx;
+      let ctx = audioContextRef.current;
+      if (!ctx || ctx.state === 'closed') {
+        ctx = new AudioContextClass();
+        audioContextRef.current = ctx;
+      }
+
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
 
       const now = ctx.currentTime;
 
@@ -24,7 +32,7 @@ export const SplashScreen = ({ onFinish }) => {
       subOsc.frequency.setValueAtTime(65, now);
       subOsc.frequency.exponentialRampToValueAtTime(130, now + 0.8);
       subGain.gain.setValueAtTime(0, now);
-      subGain.gain.linearRampToValueAtTime(0.28, now + 0.3);
+      subGain.gain.linearRampToValueAtTime(0.3, now + 0.3);
       subGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
       subOsc.connect(subGain);
       subGain.connect(ctx.destination);
@@ -46,7 +54,7 @@ export const SplashScreen = ({ onFinish }) => {
 
         const startTime = now + 0.2 + index * 0.12;
         gain.gain.setValueAtTime(0, startTime);
-        gain.gain.linearRampToValueAtTime(0.18, startTime + 0.08);
+        gain.gain.linearRampToValueAtTime(0.2, startTime + 0.08);
         gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 2.4);
 
         osc.connect(filter);
@@ -63,40 +71,55 @@ export const SplashScreen = ({ onFinish }) => {
       shimmerOsc.type = 'sine';
       shimmerOsc.frequency.setValueAtTime(1567.98, now + 0.8); // G6
       shimmerGain.gain.setValueAtTime(0, now + 0.8);
-      shimmerGain.gain.linearRampToValueAtTime(0.12, now + 0.9);
+      shimmerGain.gain.linearRampToValueAtTime(0.15, now + 0.9);
       shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
       shimmerOsc.connect(shimmerGain);
       shimmerGain.connect(ctx.destination);
       shimmerOsc.start(now + 0.8);
       shimmerOsc.stop(now + 2.9);
+
+      setSoundPlayed(true);
     } catch (e) {
       console.log('Audio playback prevented or unsupported', e);
     }
   };
 
   useEffect(() => {
-    // Play startup sound on mount
+    // Attempt playback immediately
     playStartupChime();
+
+    // Auto-unlock audio on first touch/click/key if browser blocked autoplay
+    const unlockAudio = () => {
+      playStartupChime();
+    };
+
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
 
     // Cinematic Extended Splash Duration (~4.0s total)
     const fadeTimer = setTimeout(() => {
       setIsFadingOut(true);
-    }, 3500);
+    }, 3800);
 
     const finishTimer = setTimeout(() => {
       if (onFinish) onFinish();
-    }, 4100);
+    }, 4300);
 
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(finishTimer);
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
       }
     };
   }, [onFinish]);
 
-  const handleSkip = () => {
+  const handleSkip = (e) => {
+    if (e) e.stopPropagation();
     setIsFadingOut(true);
     setTimeout(() => {
       if (onFinish) onFinish();
@@ -105,8 +128,7 @@ export const SplashScreen = ({ onFinish }) => {
 
   return (
     <div
-      onClick={handleSkip}
-      className={`fixed inset-0 z-[100] bg-[#06080F] flex flex-col items-center justify-between py-12 px-6 select-none cursor-pointer transition-opacity duration-700 overflow-hidden ${
+      className={`fixed inset-0 z-[100] bg-[#06080F] flex flex-col items-center justify-between py-12 px-6 select-none transition-opacity duration-700 overflow-hidden ${
         isFadingOut ? 'opacity-0 pointer-events-none scale-105' : 'opacity-100 scale-100'
       }`}
     >
@@ -114,116 +136,131 @@ export const SplashScreen = ({ onFinish }) => {
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-blue-600/20 rounded-full blur-[150px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 translate-y-1/4 w-[460px] h-[460px] bg-purple-600/20 rounded-full blur-[140px] pointer-events-none animate-pulse" />
 
-      {/* Top subtle hint */}
-      <div className="z-10 flex items-center justify-between w-full max-w-sm text-slate-500 text-xs">
-        <span className="flex items-center gap-1.5 font-bold tracking-wider text-[11px] text-blue-400 uppercase">
-          <Sparkles className="w-3.5 h-3.5 animate-spin-slow" />
-          <span>LinkUp Network</span>
-        </span>
+      {/* Top action bar: Replay sound & Skip button */}
+      <div className="z-20 flex items-center justify-between w-full max-w-sm text-slate-400 text-xs">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             playStartupChime();
           }}
-          className="p-1.5 rounded-full hover:bg-slate-900 text-slate-400 hover:text-white transition-colors"
-          title="Replay Sound"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 text-slate-200 font-bold text-[11px] shadow-lg transition-all hover:scale-105 active:scale-95"
         >
-          <Volume2 className="w-4 h-4" />
+          <Volume2 className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+          <span>Sound {soundPlayed ? 'On 🔊' : 'Tap to Play 🎵'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSkip}
+          className="px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 font-semibold text-[11px] transition-colors"
+        >
+          Skip
         </button>
       </div>
 
-      {/* Main Center Stage: Interlocking Blue & Purple Loops matching Dark Interface */}
+      {/* Main Center Stage: Interlocking Blue & Purple Loops */}
       <div className="relative z-10 flex flex-col items-center justify-center my-auto">
-        {/* Animated Interlocking Logo with Ambient Glow */}
+        {/* Animated Interlocking Logo */}
         <div className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center mb-6">
-          {/* SVG Animated High-Resolution Vector with exact Interface Color Palettes */}
           <svg
             viewBox="0 0 200 200"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-full h-full drop-shadow-[0_15px_35px_rgba(37,99,235,0.45)]"
+            className="w-full h-full drop-shadow-[0_0_35px_rgba(59,130,246,0.35)] animate-in zoom-in-90 duration-1000"
           >
             <defs>
-              <linearGradient id="splashDarkBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="splashBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#38BDF8" />
-                <stop offset="45%" stopColor="#2563EB" />
+                <stop offset="50%" stopColor="#2563EB" />
                 <stop offset="100%" stopColor="#1D4ED8" />
               </linearGradient>
-              <linearGradient id="splashDarkPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+
+              <linearGradient id="splashPurpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#C084FC" />
-                <stop offset="45%" stopColor="#8B5CF6" />
-                <stop offset="100%" stopColor="#6D28D9" />
+                <stop offset="50%" stopColor="#9333EA" />
+                <stop offset="100%" stopColor="#6B21A8" />
               </linearGradient>
-              <filter id="splashDarkShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="10" stdDeviation="8" floodColor="#000000" floodOpacity="0.7" />
+
+              <filter id="splashGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="6" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
 
-            {/* Purple Loop Link (sliding in from bottom right) */}
-            <g className="animate-link-purple">
-              <path
-                d="M 90,85 C 90,68 104,54 122,54 L 146,54 C 164,54 178,68 178,85 C 178,102 164,116 146,116 L 122,116 C 104,116 90,102 90,85 Z"
-                fill="none"
-                stroke="url(#splashDarkPurple)"
-                strokeWidth="24"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#splashDarkShadow)"
-              />
-            </g>
+            {/* Ambient Background Glow Behind Loops */}
+            <circle cx="100" cy="100" r="70" fill="url(#splashBlueGrad)" opacity="0.12" filter="url(#splashGlow)" />
+            <circle cx="120" cy="100" r="60" fill="url(#splashPurpleGrad)" opacity="0.12" filter="url(#splashGlow)" />
 
-            {/* Blue Loop Link (sliding in from top left and interlocking) */}
-            <g className="animate-link-blue">
-              <path
-                d="M 22,85 C 22,68 36,54 54,54 L 78,54 C 96,54 110,68 110,85 C 110,102 96,116 78,116 L 54,116 C 36,116 22,102 22,85 Z"
-                fill="none"
-                stroke="url(#splashDarkBlue)"
-                strokeWidth="24"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#splashDarkShadow)"
-              />
-            </g>
+            {/* Left Interlocking Loop (Electric Blue) */}
+            <path
+              d="M 68 62 
+                 C 40 62, 22 80, 22 100 
+                 C 22 120, 40 138, 68 138 
+                 C 88 138, 102 126, 110 114 
+                 C 102 106, 92 98, 80 98 
+                 C 66 98, 54 104, 48 100 
+                 C 46 96, 50 86, 68 86 
+                 C 80 86, 92 92, 100 100 
+                 C 108 90, 112 80, 110 74 
+                 C 100 64, 86 62, 68 62 Z"
+              fill="url(#splashBlueGrad)"
+              className="transition-all duration-1000 ease-out animate-pulse"
+            />
+
+            {/* Right Interlocking Loop (Deep Royal Purple) */}
+            <path
+              d="M 132 138 
+                 C 160 138, 178 120, 178 100 
+                 C 178 80, 160 62, 132 62 
+                 C 112 62, 98 74, 90 86 
+                 C 98 94, 108 102, 120 102 
+                 C 134 102, 146 96, 152 100 
+                 C 154 104, 150 114, 132 114 
+                 C 120 114, 108 108, 100 100 
+                 C 92 110, 88 120, 90 126 
+                 C 100 136, 114 138, 132 138 Z"
+              fill="url(#splashPurpleGrad)"
+              className="transition-all duration-1000 ease-out"
+            />
+
+            {/* Intertwined Overlap Core */}
+            <path
+              d="M 90 86 C 98 94, 104 100, 110 114 C 112 106, 110 94, 100 86 Z"
+              fill="#A855F7"
+              opacity="0.9"
+            />
           </svg>
 
-          {/* Central Glow Sparkle Burst on Interlock */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-14 h-14 bg-blue-400/30 rounded-full blur-md animate-ping duration-1000" />
-          </div>
+          {/* Orbiting particle ring */}
+          <div className="absolute inset-0 rounded-full border border-blue-500/20 animate-spin-slow pointer-events-none" />
+          <div className="absolute inset-2 rounded-full border border-purple-500/20 border-dashed animate-reverse-spin pointer-events-none" />
         </div>
 
-        {/* Brand Typography "LinkUp" Matching Dark Theme */}
-        <div className="flex flex-col items-center text-center animate-text-reveal">
-          <div className="flex items-baseline text-4xl sm:text-5xl font-black tracking-tight drop-shadow-2xl">
-            <span className="text-white font-sans">Link</span>
-            <span className="text-blue-500 font-sans ml-1">Up</span>
-          </div>
+        {/* Brand Wordmark & Tagline */}
+        <div className="flex flex-col items-center gap-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 drop-shadow-lg">
+            LinkUp
+          </h1>
+          <p className="text-xs sm:text-sm font-semibold tracking-wide text-slate-400 max-w-xs">
+            Connect. Share. Groove to the Beat.
+          </p>
 
-          {/* Subtitle "CONNECT. • SHARE. • GROW." */}
-          <div className="flex items-center gap-1 text-[11px] sm:text-xs uppercase font-extrabold tracking-[0.28em] text-slate-300 mt-2.5 drop-shadow">
-            <span>CONNECT<span className="text-blue-400 font-black">.</span></span>
-            <span className="text-blue-500 font-black mx-1">•</span>
-            <span>SHARE<span className="text-purple-400 font-black">.</span></span>
-            <span className="text-purple-500 font-black mx-1">•</span>
-            <span>GROW<span className="text-blue-400 font-black">.</span></span>
+          {/* Regional Sound Badge */}
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>105 Regional Hits • Kannada • Telugu • Tamil</span>
           </div>
-        </div>
-
-        {/* Cinematic Loading Progress Bar */}
-        <div className="w-44 sm:w-56 h-1.5 bg-slate-900 rounded-full overflow-hidden mt-8 border border-slate-800 shadow-inner">
-          <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full animate-pulse w-full duration-1000" />
         </div>
       </div>
 
-      {/* Bottom info & skip hint */}
-      <div className="z-10 flex flex-col items-center gap-1 text-center">
-        <span className="text-[11px] font-bold text-slate-400 tracking-wider">
-          Connecting you to friends & regional music...
-        </span>
-        <span className="text-[10px] text-slate-500 font-medium">
-          Tap anywhere to skip intro
-        </span>
+      {/* Bottom loading bar & Version */}
+      <div className="z-10 flex flex-col items-center gap-3 w-full max-w-xs">
+        <div className="w-full h-1 bg-slate-900/80 rounded-full overflow-hidden border border-slate-800/80">
+          <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full animate-loading-bar" />
+        </div>
+        <div className="flex items-center justify-between w-full text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+          <span>Loading Experience</span>
+          <span className="text-blue-400 font-mono">v1.0.0</span>
+        </div>
       </div>
     </div>
   );

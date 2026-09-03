@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
+import { fileToBase64 } from '../../utils/imageUtils';
 
 export const EditProfileModal = ({ isOpen, onClose }) => {
   const { user, updateUserProfile } = useAuth();
@@ -42,11 +43,15 @@ export const EditProfileModal = ({ isOpen, onClose }) => {
     'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80',
   ];
 
-  const handleAvatarUpload = (e) => {
+  const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setAvatar(objectUrl);
+    try {
+      const permanentBase64 = await fileToBase64(file, 400, 400, 0.85);
+      setAvatar(permanentBase64);
+    } catch (err) {
+      console.warn('Error converting avatar:', err);
+    }
   };
 
   const handleSave = (e) => {

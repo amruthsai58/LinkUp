@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { X, Plus, Sparkles, Check, Image as ImageIcon, Video } from 'lucide-react';
+import { X, Plus, Sparkles, Image as ImageIcon, Video, Check } from 'lucide-react';
+import { fileToBase64 } from '../../utils/imageUtils';
 
-export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight }) => {
+export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight, onCreateHighlight }) => {
   const fileInputRef = useRef(null);
+  const handleAdd = onAddHighlight || onCreateHighlight;
 
   const [name, setName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('🌟');
@@ -11,7 +13,7 @@ export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight }) => {
 
   if (!isOpen) return null;
 
-  const ICONS = ['🌴', '🏔️', '</>', '👥', '🌟', '🎵', '☕', '🚗', '🎨', '🔥', '🏆', '💎'];
+  const ICONS = ['🌟', '🌴', '🏔️', '🎵', '</>', '☕', '🚗', '🎨', '🔥', '🏆', '💎', '👥'];
   const COLORS = [
     { label: 'Purple', class: 'border-purple-500/80', bg: 'from-purple-600 to-indigo-600' },
     { label: 'Emerald', class: 'border-emerald-500/80', bg: 'from-emerald-500 to-teal-500' },
@@ -20,24 +22,29 @@ export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight }) => {
     { label: 'Orange', class: 'border-orange-500/80', bg: 'from-orange-500 to-amber-500' },
   ];
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    files.forEach((file) => {
+    for (const file of files) {
       const isVideo = file.type.startsWith('video');
-      const objectUrl = URL.createObjectURL(file);
+      let finalUrl;
+      if (isVideo) {
+        finalUrl = URL.createObjectURL(file);
+      } else {
+        finalUrl = await fileToBase64(file, 800, 1000, 0.85);
+      }
       setMediaItems((prev) => [
         ...prev,
         {
           id: `story-${Date.now()}-${Math.random()}`,
-          url: objectUrl,
+          url: finalUrl,
           type: isVideo ? 'video' : 'image',
           caption: `Memory in ${name || 'Highlight'}`,
           time: 'Just now',
         },
       ]);
-    });
+    }
     e.target.value = '';
   };
 
@@ -49,7 +56,8 @@ export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight }) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    onAddHighlight({
+    if (handleAdd) {
+      handleAdd({
       id: `hl-${Date.now()}`,
       name: name.trim(),
       icon: selectedIcon,
@@ -61,7 +69,8 @@ export const CreateHighlightModal = ({ isOpen, onClose, onAddHighlight }) => {
           time: 'Just now',
         },
       ],
-    });
+      });
+    }
 
     setName('');
     setMediaItems([]);

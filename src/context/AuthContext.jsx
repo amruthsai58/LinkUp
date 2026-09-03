@@ -260,10 +260,34 @@ export const AuthProvider = ({ children }) => {
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...updatedFields };
-      // Also update in registered users database
-      const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-      const newDb = savedDb.map((u) => (u.id === prev.id ? updated : u));
-      localStorage.setItem('linkup_registered_users', JSON.stringify(newDb));
+
+      // Persist immediately to active session in localStorage
+      localStorage.setItem('linkup_auth_user', JSON.stringify(updated));
+
+      // Persist to registered users database matching by id, username, or email
+      try {
+        const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+        let matched = false;
+        const newDb = savedDb.map((u) => {
+          if (
+            (u.id && prev.id && u.id === prev.id) ||
+            (u.username && prev.username && u.username.toLowerCase() === prev.username.toLowerCase()) ||
+            (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
+          ) {
+            matched = true;
+            return { ...u, ...updated };
+          }
+          return u;
+        });
+
+        if (!matched) {
+          newDb.unshift(updated);
+        }
+        localStorage.setItem('linkup_registered_users', JSON.stringify(newDb));
+      } catch (e) {
+        console.warn('Error updating registered database:', e);
+      }
+
       return updated;
     });
   };

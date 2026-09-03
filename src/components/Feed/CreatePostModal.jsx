@@ -15,6 +15,7 @@ import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMusic } from '../../context/MusicContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
+import { fileToBase64 } from '../../utils/imageUtils';
 import { AiAssistantModal } from '../AI/AiAssistantModal';
 import { LiveStreamModal } from './LiveStreamModal';
 
@@ -55,21 +56,26 @@ export const CreatePostModal = () => {
     f.username.toLowerCase().includes(friendSearch.toLowerCase())
   );
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    files.forEach((file) => {
+    for (const file of files) {
       const isVideo = file.type.startsWith('video');
-      const objectUrl = URL.createObjectURL(file);
+      let finalUrl;
+      if (isVideo) {
+        finalUrl = URL.createObjectURL(file);
+      } else {
+        finalUrl = await fileToBase64(file, 800, 800, 0.85);
+      }
       setMediaItems((prev) => [
         ...prev,
         {
           type: isVideo ? 'video' : 'image',
-          url: objectUrl,
+          url: finalUrl,
         },
       ]);
-    });
+    }
     e.target.value = '';
   };
 

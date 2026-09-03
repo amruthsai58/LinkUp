@@ -18,6 +18,7 @@ import {
 import { useSocial } from '../../context/SocialContext';
 import { useMusic } from '../../context/MusicContext';
 import { REGIONAL_LANGUAGES } from '../../data/musicCatalog';
+import { fileToBase64 } from '../../utils/imageUtils';
 import { AiAssistantModal } from '../AI/AiAssistantModal';
 import { StoryPrivacyModal } from './StoryPrivacyModal';
 
@@ -82,11 +83,15 @@ export const StoryCreatorModal = () => {
     }
   };
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const objUrl = URL.createObjectURL(file);
-      setMediaUrl(objUrl);
+      try {
+        const permanentDataUrl = await fileToBase64(file, 900, 1200, 0.85);
+        setMediaUrl(permanentDataUrl);
+      } catch (err) {
+        console.warn('Error reading photo:', err);
+      }
     }
   };
 

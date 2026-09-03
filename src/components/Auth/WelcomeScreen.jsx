@@ -1,134 +1,415 @@
-import React from 'react';
-import { Users, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  User,
+  Mail,
+  Lock,
+  Calendar,
+  Eye,
+  EyeOff,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  LogIn,
+} from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
-import { useAuth } from '../../context/AuthContext';
-import { CURRENT_USER, INITIAL_FRIENDS } from '../../data/mockSocialData';
-import { Logo, LogoSymbol } from '../Common/Logo';
+import { useAuth, calculatePasswordStrength } from '../../context/AuthContext';
+import { Logo } from '../Common/Logo';
 
 export const WelcomeScreen = () => {
   const { setActiveTab } = useSocial();
-  const { setAuthModalOpen, setAuthMode, login } = useAuth();
+  const { signup, login, loginWithGoogle, setGoogleAuthModalOpen } = useAuth();
 
-  const handleOpenSignup = () => {
-    setAuthMode('signup');
-    setAuthModalOpen(true);
+  // Mode: 'signup' | 'login'
+  const [mode, setMode] = useState('signup');
+
+  // Sign Up Form States
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [dob, setDob] = useState('2003-05-15');
+  const [gender, setGender] = useState('Male');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Login Form States
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  const [errorMsg, setErrorMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const passwordMetrics = calculatePasswordStrength(password);
+
+  const handleSignup = (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!name.trim()) {
+      setErrorMsg('Please enter your full name');
+      return;
+    }
+    if (!email.trim() && !username.trim()) {
+      setErrorMsg('Please enter an email or username');
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      signup({
+        name: name.trim(),
+        username: username.trim() || name.trim().toLowerCase().replace(/\s+/g, '.'),
+        email: email.trim() || `${username.trim()}@gmail.com`,
+        password,
+        dob,
+        gender,
+      });
+      setActiveTab('home');
+    } catch (err) {
+      setErrorMsg(err.message || 'Signup failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOpenLogin = () => {
-    setAuthMode('login');
-    setAuthModalOpen(true);
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!loginIdentifier.trim()) {
+      setErrorMsg('Please enter your email or username');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      login(loginIdentifier.trim(), loginPassword);
+      setActiveTab('home');
+    } catch (err) {
+      setErrorMsg(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExploreGuest = () => {
-    login(CURRENT_USER);
-    setActiveTab('home');
+  const handleGoogleSignIn = () => {
+    setGoogleAuthModalOpen(true);
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col justify-between items-center px-6 py-6 text-center select-none relative overflow-hidden bg-[#090C15] text-slate-100">
+    <div className="min-h-[88vh] flex flex-col justify-center items-center px-4 py-4 select-none relative overflow-hidden bg-[#06080F] text-slate-100 animate-in fade-in duration-300">
       {/* Background ambient neon glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/3 right-10 w-60 h-60 bg-purple-600/20 rounded-full blur-[90px] pointer-events-none" />
+      <div className="absolute top-1/6 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/15 rounded-full blur-[110px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-5 w-72 h-72 bg-purple-600/15 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Top Brand Header with Official Logo & Tagline */}
-      <div className="flex flex-col items-center gap-1 pt-4 z-10">
-        <Logo size="lg" showTagline={true} layout="vertical" />
-        <p className="text-xs text-slate-400 font-medium max-w-xs mt-2 leading-relaxed">
-          Connect with friends and the world around you.
-        </p>
-      </div>
+      {/* Main Container Card */}
+      <div className="relative w-full max-w-md bg-[#0A0D18] border border-slate-800/90 rounded-3xl p-6 sm:p-7 shadow-2xl z-10 flex flex-col gap-4">
+        {/* Top Logo & Tagline */}
+        <div className="flex flex-col items-center gap-1 text-center">
+          <Logo size="md" showTagline={false} layout="horizontal" />
+          <p className="text-xs text-slate-400 mt-1">
+            {mode === 'signup'
+              ? 'Create an account to connect with friends & enjoy regional hits'
+              : 'Welcome back! Log in to your LinkUp account'}
+          </p>
+        </div>
 
-      {/* Center Floating Orbital Avatar Galaxy with Central Intertwined Logo Ring */}
-      <div className="relative w-64 h-64 sm:w-72 sm:h-72 my-6 flex items-center justify-center z-10">
-        {/* Concentric orbital rings */}
-        <div className="absolute inset-0 rounded-full border border-blue-500/20 animate-spin-slow" />
-        <div className="absolute inset-8 rounded-full border border-purple-500/20 border-dashed animate-reverse-spin" />
-        <div className="absolute inset-16 rounded-full border border-indigo-500/30" />
+        {/* Mode Switcher Tabs */}
+        <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-900 border border-slate-800">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('signup');
+              setErrorMsg('');
+            }}
+            className={`py-2 text-xs font-extrabold rounded-xl transition-all ${
+              mode === 'signup'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Create Account
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('login');
+              setErrorMsg('');
+            }}
+            className={`py-2 text-xs font-extrabold rounded-xl transition-all ${
+              mode === 'login'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Log In
+          </button>
+        </div>
 
-        {/* Center Logo with User Avatar Badge */}
-        <div
-          onClick={handleExploreGuest}
-          className="relative z-20 w-24 h-24 rounded-3xl p-3 bg-gradient-to-tr from-slate-900 via-[#0E1428] to-slate-900 border-2 border-blue-500/50 shadow-2xl shadow-blue-600/30 hover:scale-105 transition-transform cursor-pointer flex items-center justify-center"
-          title="Explore LinkUp"
-        >
-          <LogoSymbol size={64} />
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-blue-600 text-[9px] font-black text-white shadow-md uppercase tracking-wider">
-            Explore
+        {/* Error Alert */}
+        {errorMsg && (
+          <div className="p-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+            <span>{errorMsg}</span>
           </div>
-        </div>
+        )}
 
-        {/* Satellite Friend Avatar 1 (Top Left - Rahul) */}
-        <div className="absolute top-2 left-6 z-20 w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-blue-500 to-cyan-400 shadow-lg animate-bounce duration-1000">
-          <img
-            src={INITIAL_FRIENDS[0]?.avatar}
-            alt={INITIAL_FRIENDS[0]?.name}
-            className="w-full h-full rounded-full object-cover border border-[#090C15]"
-          />
-        </div>
-
-        {/* Satellite Friend Avatar 2 (Top Right - Priya) */}
-        <div className="absolute top-6 right-4 z-20 w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-pink-500 to-purple-500 shadow-lg animate-pulse">
-          <img
-            src={INITIAL_FRIENDS[1]?.avatar}
-            alt={INITIAL_FRIENDS[1]?.name}
-            className="w-full h-full rounded-full object-cover border border-[#090C15]"
-          />
-        </div>
-
-        {/* Satellite Friend Avatar 3 (Middle Right - Kiran) */}
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full p-0.5 bg-gradient-to-tr from-amber-500 to-orange-400 shadow-lg">
-          <img
-            src={INITIAL_FRIENDS[2]?.avatar}
-            alt={INITIAL_FRIENDS[2]?.name}
-            className="w-full h-full rounded-full object-cover border border-[#090C15]"
-          />
-        </div>
-
-        {/* Satellite Friend Avatar 4 (Bottom Left - Ananya) */}
-        <div className="absolute bottom-4 left-4 z-20 w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-emerald-500 to-teal-400 shadow-lg animate-pulse">
-          <img
-            src={INITIAL_FRIENDS[3]?.avatar}
-            alt={INITIAL_FRIENDS[3]?.name}
-            className="w-full h-full rounded-full object-cover border border-[#090C15]"
-          />
-        </div>
-
-        {/* Satellite Friend Avatar 5 (Middle Left - Sahana) */}
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 to-indigo-500 shadow-lg">
-          <img
-            src={INITIAL_FRIENDS[4]?.avatar}
-            alt={INITIAL_FRIENDS[4]?.name}
-            className="w-full h-full rounded-full object-cover border border-[#090C15]"
-          />
-        </div>
-      </div>
-
-      {/* Bottom Auth Buttons & Explore Link */}
-      <div className="w-full max-w-sm flex flex-col gap-3.5 z-10 pb-4">
+        {/* One-Tap Google OAuth */}
         <button
           type="button"
-          onClick={handleOpenSignup}
-          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white font-extrabold text-sm shadow-xl shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-98"
+          onClick={handleGoogleSignIn}
+          className="w-full py-2.5 px-4 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-xs flex items-center justify-center gap-2.5 transition-all hover:scale-[1.01] shadow-sm"
         >
-          Create New Account
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span>Continue with Google</span>
         </button>
 
-        <button
-          type="button"
-          onClick={handleOpenLogin}
-          className="w-full py-3.5 px-6 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-bold text-sm border border-slate-800 shadow-lg transition-all hover:scale-[1.02] active:scale-98"
-        >
-          Log In
-        </button>
+        {/* Divider */}
+        <div className="flex items-center gap-2 my-0.5">
+          <div className="flex-1 h-px bg-slate-800" />
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">or</span>
+          <div className="flex-1 h-px bg-slate-800" />
+        </div>
 
-        <button
-          type="button"
-          onClick={handleExploreGuest}
-          className="mt-1 text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center justify-center gap-1 transition-colors"
-        >
-          <span>Explore LinkUp</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        {/* SIGN UP FORM */}
+        {mode === 'signup' ? (
+          <form onSubmit={handleSignup} className="flex flex-col gap-3">
+            {/* Full Name */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Ashok Lingaraddi"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Username & DOB Row */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ashok.lingaraddi"
+                  className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Date of Birth</label>
+                <div className="relative">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    className="w-full pl-8 pr-2 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-[11px] text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Gender Selection */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Gender</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {['Male', 'Female', 'Custom'].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGender(g)}
+                    className={`py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      gender === g
+                        ? 'bg-blue-600/30 border border-blue-500 text-white'
+                        : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a strong password"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Password strength indicator */}
+              {password && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${passwordMetrics.color} transition-all duration-300`}
+                      style={{ width: `${passwordMetrics.percent}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">{passwordMetrics.label}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 mt-1 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 hover:opacity-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <span>{loading ? 'Creating Account...' : 'Sign Up & Join LinkUp'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        ) : (
+          /* LOG IN FORM */
+          <form onSubmit={handleLogin} className="flex flex-col gap-3.5">
+            {/* Email or Username */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Email or Username
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  required
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  placeholder="Enter your email or username"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Login Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 mt-1 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 hover:opacity-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <span>{loading ? 'Logging In...' : 'Log In'}</span>
+              <LogIn className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+
+        {/* Footer switch */}
+        <div className="text-center pt-2 border-t border-slate-800/80">
+          {mode === 'signup' ? (
+            <p className="text-xs text-slate-400">
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setErrorMsg('');
+                }}
+                className="text-blue-400 hover:text-blue-300 font-bold hover:underline"
+              >
+                Log In
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  setErrorMsg('');
+                }}
+                className="text-blue-400 hover:text-blue-300 font-bold hover:underline"
+              >
+                Sign Up
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

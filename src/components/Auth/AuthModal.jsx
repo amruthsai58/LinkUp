@@ -33,8 +33,8 @@ export const AuthModal = () => {
   const { setActiveTab } = useSocial();
 
   // Login form state
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState('ashok.lingaraddi');
+  const [password, setPassword] = useState('Linkup@2026');
   const [showPassword, setShowPassword] = useState(false);
 
   // Signup form state
@@ -42,8 +42,8 @@ export const AuthModal = () => {
   const [signupUsername, setSignupUsername] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [dob, setDob] = useState('');
-  const [gender, setGender] = useState('Rather not say');
+  const [dob, setDob] = useState('2003-05-15');
+  const [gender, setGender] = useState('Male');
 
   // Forgot password OTP flow state
   const [forgotEmail, setForgotEmail] = useState('');
@@ -205,7 +205,7 @@ export const AuthModal = () => {
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Username or email address"
+                  placeholder="e.g. ashok.lingaraddi or yourname@gmail.com"
                   className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-100 text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 />
               </div>
@@ -301,7 +301,7 @@ export const AuthModal = () => {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your full name"
+                    placeholder="Ashok Lingaraddi"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-purple-500"
                   />
                 </div>
@@ -314,7 +314,7 @@ export const AuthModal = () => {
                   required
                   value={signupUsername}
                   onChange={(e) => setSignupUsername(e.target.value)}
-                  placeholder="Choose a username"
+                  placeholder="ashok.lingaraddi"
                   className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-purple-500"
                 />
               </div>

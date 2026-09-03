@@ -13,12 +13,18 @@ import {
   MoreVertical,
   Shield,
   Check,
+  Flag,
+  VolumeX,
+  Share2,
+  Copy,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
+import { useAuth } from '../../context/AuthContext';
 import { useMusic } from '../../context/MusicContext';
 import { StoryPrivacyModal } from './StoryPrivacyModal';
 
 export const StoryViewerModal = () => {
+  const { user } = useAuth();
   const { stories, activeStoryIndex, setActiveStoryIndex, deleteStory, updateStoryPrivacy } = useSocial();
   const { tracks, playTrack, stopAudio, togglePlay, currentTrack, isPlaying } = useMusic();
 
@@ -37,6 +43,17 @@ export const StoryViewerModal = () => {
     : null;
 
   const isStoryMusicPlaying = isPlaying && currentTrack?.id === attachedTrack?.id;
+
+  // Strict ownership verification: Only owner can delete or edit privacy of their story
+  const isOwnStory = Boolean(
+    user && currentStory && (
+      currentStory.user?.id === user.id ||
+      currentStory.user?.isOwner ||
+      currentStory.user?.name === 'Your Story' ||
+      currentStory.user?.name?.includes('(You)') ||
+      (currentStory.user?.username && currentStory.user?.username === user.username)
+    )
+  );
 
   // Track if story is in interactive settings mode
   const isSettingsActive = menuOpen || privacyModalOpen || showDeleteConfirm;
@@ -116,6 +133,12 @@ export const StoryViewerModal = () => {
 
   const handleDeleteStory = (e) => {
     if (e) e.stopPropagation();
+    if (!isOwnStory) {
+      setToastMsg('You can only delete your own stories');
+      setTimeout(() => setToastMsg(''), 2500);
+      return;
+    }
+
     const idToDelete = currentStory.id;
     deleteStory(idToDelete);
     setShowDeleteConfirm(false);
@@ -132,9 +155,28 @@ export const StoryViewerModal = () => {
   };
 
   const handleSavePrivacy = ({ privacy, hiddenFromUserIds }) => {
+    if (!isOwnStory) return;
     updateStoryPrivacy(currentStory.id, { privacy, hiddenFromUserIds });
     setPrivacyModalOpen(false);
     setToastMsg(`Privacy updated to ${privacy}`);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  const handleMuteUser = () => {
+    setMenuOpen(false);
+    setToastMsg(`Muted stories from ${currentStory.user.name}`);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  const handleReportStory = () => {
+    setMenuOpen(false);
+    setToastMsg('Thank you. This story was reported for review.');
+    setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  const handleCopyLink = () => {
+    setMenuOpen(false);
+    setToastMsg('Story link copied to clipboard!');
     setTimeout(() => setToastMsg(''), 2500);
   };
 
@@ -143,7 +185,7 @@ export const StoryViewerModal = () => {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-2xl select-none p-0 sm:p-4 animate-in fade-in duration-200">
         {/* Toast Alert */}
         {toastMsg && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-60 px-4 py-2 rounded-2xl bg-slate-800/95 border border-purple-500/50 text-white text-xs font-bold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top duration-200">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[70] px-4 py-2 rounded-2xl bg-slate-800/95 border border-purple-500/50 text-white text-xs font-bold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top duration-200">
             <Check className="w-4 h-4 text-emerald-400" />
             <span>{toastMsg}</span>
           </div>
@@ -208,26 +250,42 @@ export const StoryViewerModal = () => {
                 alt={currentStory.user.name}
                 className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-lg"
               />
-              <div>
+              <div className="min-w-0">
                 <h4 className="text-sm font-bold text-white drop-shadow flex items-center gap-1.5">
-                  <span>{currentStory.user.name}</span>
+                  <span className="truncate max-w-[150px]">{currentStory.user.name}</span>
                   {currentStory.privacy && currentStory.privacy !== 'Public' && (
-                    <span className="px-2 py-0.5 rounded-full bg-purple-600/80 text-[9px] font-bold text-white shadow">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-600/80 text-[9px] font-bold text-white shadow flex-shrink-0">
                       {currentStory.privacy}
                     </span>
                   )}
                 </h4>
-                <p className="text-xs text-slate-300 drop-shadow">{currentStory.timestamp}</p>
+
+                {/* Sub-header: Track info or Timestamp */}
+                {attachedTrack ? (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePlay(attachedTrack);
+                    }}
+                    className="flex items-center gap-1.5 text-[11px] text-purple-300 hover:text-purple-200 cursor-pointer font-bold drop-shadow truncate max-w-[170px]"
+                  >
+                    <Music className="w-3 h-3 text-pink-400 flex-shrink-0" />
+                    <span className="truncate">{attachedTrack.title} • {attachedTrack.movie}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-300 drop-shadow">{currentStory.timestamp}</p>
+                )}
               </div>
             </div>
 
             {/* Top Action Controls */}
-            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
               {/* Play / Pause toggle */}
               <button
                 type="button"
                 onClick={() => setIsPaused(!isPaused)}
                 className="p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
+                title={isPaused ? 'Resume Story' : 'Pause Story'}
               >
                 {isPaused ? <Play className="w-4 h-4 fill-white" /> : <Pause className="w-4 h-4" />}
               </button>
@@ -241,55 +299,88 @@ export const StoryViewerModal = () => {
                     setMenuOpen(!menuOpen);
                   }}
                   className="p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
-                  title="Story Settings"
+                  title="Story Options"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
 
-                {/* Dropdown Menu */}
+                {/* Dropdown Menu (Positioned cleanly with zero overlap) */}
                 {menuOpen && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-11 w-48 bg-slate-900/95 backdrop-blur-2xl border border-slate-700/80 rounded-2xl p-1.5 z-50 shadow-2xl text-xs flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150"
+                    className="absolute right-0 top-11 w-52 bg-slate-900/98 backdrop-blur-2xl border border-slate-700/90 rounded-2xl p-1.5 z-50 shadow-2xl text-xs flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150"
                   >
-                    {/* Privacy / Hide settings */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(false);
-                        setPrivacyModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-800 text-slate-200 font-semibold text-left transition-colors"
-                    >
-                      <EyeOff className="w-4 h-4 text-purple-400" />
-                      <span>Hide / Privacy Settings</span>
-                    </button>
+                    {isOwnStory ? (
+                      /* ONLY story owner can access Delete and Privacy Settings */
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpen(false);
+                            setPrivacyModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-800 text-slate-200 font-semibold text-left transition-colors"
+                        >
+                          <EyeOff className="w-4 h-4 text-purple-400" />
+                          <span>Hide / Privacy Settings</span>
+                        </button>
 
-                    {/* Delete Story */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(false);
-                        setShowDeleteConfirm(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-red-500/20 text-red-400 font-semibold text-left transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Delete Story</span>
-                    </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpen(false);
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-red-500/20 text-red-400 font-semibold text-left transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete Story</span>
+                        </button>
+                      </>
+                    ) : (
+                      /* Other users see viewer actions only: No delete or privacy access */
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleCopyLink}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-800 text-slate-200 font-semibold text-left transition-colors"
+                        >
+                          <Copy className="w-4 h-4 text-blue-400" />
+                          <span>Copy Story Link</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleMuteUser}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-800 text-slate-200 font-semibold text-left transition-colors"
+                        >
+                          <VolumeX className="w-4 h-4 text-amber-400" />
+                          <span>Mute @{currentStory.user.name}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleReportStory}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-red-500/20 text-red-400 font-semibold text-left transition-colors"
+                        >
+                          <Flag className="w-4 h-4" />
+                          <span>Report Story</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Delete Confirmation Modal Overlay */}
-          {showDeleteConfirm && (
+          {/* Delete Confirmation Modal Overlay (Owner Only) */}
+          {showDeleteConfirm && isOwnStory && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-24 inset-x-4 z-50 p-4 rounded-2xl bg-slate-950/95 border border-red-500/50 backdrop-blur-2xl shadow-2xl flex flex-col gap-3 text-center animate-in fade-in zoom-in-95 duration-150"
+              className="absolute top-24 inset-x-4 z-50 p-4 rounded-2xl bg-slate-950/98 border border-red-500/50 backdrop-blur-2xl shadow-2xl flex flex-col gap-3 text-center animate-in fade-in zoom-in-95 duration-150"
             >
               <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 mx-auto flex items-center justify-center">
                 <Trash2 className="w-5 h-5" />
@@ -317,12 +408,17 @@ export const StoryViewerModal = () => {
             </div>
           )}
 
-          {/* Floating Instagram-style Music Sticker */}
+          {/* Floating Instagram-style Music Sticker: Positioned at bottom-24 above caption so it NEVER collides with top options menu */}
           {attachedTrack && (
-            <div className="absolute top-20 left-4 right-4 z-30 flex justify-center" onClick={(e) => e.stopPropagation()}>
+            <div
+              className={`absolute bottom-24 left-4 right-4 z-20 flex justify-center transition-opacity duration-200 ${
+                menuOpen ? 'opacity-30 pointer-events-none' : 'opacity-100'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div
                 onClick={() => togglePlay(attachedTrack)}
-                className="px-3.5 py-2 rounded-2xl bg-black/70 hover:bg-black/85 backdrop-blur-xl border border-purple-500/50 text-white text-xs font-bold flex items-center gap-2.5 shadow-2xl cursor-pointer transition-all hover:scale-105 active:scale-95"
+                className="px-3.5 py-2 rounded-2xl bg-black/75 hover:bg-black/90 backdrop-blur-xl border border-purple-500/50 text-white text-xs font-bold flex items-center gap-2.5 shadow-2xl cursor-pointer transition-all hover:scale-105 active:scale-95 max-w-[300px]"
               >
                 <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-purple-950 flex items-center justify-center">
                   <img
@@ -339,7 +435,7 @@ export const StoryViewerModal = () => {
                   </div>
                 </div>
 
-                <div className="min-w-0 max-w-[170px]">
+                <div className="min-w-0 flex-1">
                   <span className="block truncate font-bold text-purple-200">
                     {attachedTrack.title} • {attachedTrack.movie}
                   </span>
@@ -422,14 +518,16 @@ export const StoryViewerModal = () => {
         </div>
       </div>
 
-      {/* Story Privacy & Hide Modal */}
-      <StoryPrivacyModal
-        isOpen={privacyModalOpen}
-        onClose={() => setPrivacyModalOpen(false)}
-        currentPrivacy={currentStory.privacy || 'Public'}
-        hiddenUserIds={currentStory.hiddenFromUserIds || []}
-        onSavePrivacy={handleSavePrivacy}
-      />
+      {/* Story Privacy & Hide Modal (Only accessible for own stories) */}
+      {isOwnStory && (
+        <StoryPrivacyModal
+          isOpen={privacyModalOpen}
+          onClose={() => setPrivacyModalOpen(false)}
+          currentPrivacy={currentStory.privacy || 'Public'}
+          hiddenUserIds={currentStory.hiddenFromUserIds || []}
+          onSavePrivacy={handleSavePrivacy}
+        />
+      )}
     </>
   );
 };

@@ -188,6 +188,12 @@ export const ReelsView = () => {
           loop
           muted={isMuted}
           playsInline
+          onError={(e) => {
+            if (e.target.src !== 'https://vjs.zencdn.net/v/oceans.mp4') {
+              e.target.src = 'https://vjs.zencdn.net/v/oceans.mp4';
+              e.target.play().catch(() => {});
+            }
+          }}
           className="w-full h-full object-cover"
         />
 

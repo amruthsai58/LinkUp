@@ -68,11 +68,57 @@ export const SocialProvider = ({ children }) => {
   const [groups, setGroups] = useState(INITIAL_GROUPS);
   const [pages, setPages] = useState(INITIAL_PAGES);
   const [marketplaceItems, setMarketplaceItems] = useState(INITIAL_MARKETPLACE_ITEMS);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
-  const [conversations, setConversations] = useState(INITIAL_MESSAGES_CONVERSATIONS);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem('linkup_notifications');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_NOTIFICATIONS;
+  });
+
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('linkup_conversations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_MESSAGES_CONVERSATIONS;
+  });
 
   // Active direct chat conversation
-  const [activeConversation, setActiveConversation] = useState(INITIAL_MESSAGES_CONVERSATIONS[0]);
+  const [activeConversation, setActiveConversation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('linkup_conversations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+    } catch {}
+    return INITIAL_MESSAGES_CONVERSATIONS[0];
+  });
+
+  // Persist conversations to localStorage so messages never disappear after refresh
+  useEffect(() => {
+    try {
+      localStorage.setItem('linkup_conversations', JSON.stringify(conversations));
+    } catch (err) {
+      console.warn('Error saving conversations:', err);
+    }
+  }, [conversations]);
+
+  // Persist notifications to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('linkup_notifications', JSON.stringify(notifications));
+    } catch (err) {
+      console.warn('Error saving notifications:', err);
+    }
+  }, [notifications]);
 
   // Real-Time Active Live Streams tracking
   const [activeLiveStreams, setActiveLiveStreams] = useState(() => {
@@ -223,11 +269,115 @@ export const SocialProvider = ({ children }) => {
       }
     });
 
+    // 5. Subscribe to Real-Time Friend Requests & Follows
+    const unsubFriendReq = realtime.subscribe('NEW_FRIEND_REQUEST', (payload) => {
+      if (!payload || !user) return;
+      const isForMe =
+        (payload.recipientId && user.id && payload.recipientId === user.id) ||
+        (payload.recipientUsername && user.username && payload.recipientUsername.toLowerCase() === user.username.toLowerCase()) ||
+        (payload.recipientLinkUpId && user.linkupId && payload.recipientLinkUpId.toLowerCase() === user.linkupId.toLowerCase());
+
+      if (isForMe) {
+        const newNotif = {
+          id: payload.id || `notif-req-${Date.now()}`,
+          type: 'friend_request',
+          section: 'New',
+          user: {
+            id: payload.senderId,
+            name: payload.senderName,
+            username: payload.senderUsername,
+            avatar: payload.senderAvatar,
+            linkupId: payload.senderLinkUpId,
+          },
+          action: 'sent you a friend request.',
+          time: 'Just now',
+          read: false,
+          hasActions: true,
+        };
+
+        setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+
+        setFriends((prev) => {
+          const exists = prev.some(
+            (f) =>
+              (f.id && f.id === payload.senderId) ||
+              (f.username && payload.senderUsername && f.username.toLowerCase() === payload.senderUsername.toLowerCase())
+          );
+          if (exists) {
+            return prev.map((f) =>
+              (f.id && f.id === payload.senderId) ||
+              (f.username && payload.senderUsername && f.username.toLowerCase() === payload.senderUsername.toLowerCase())
+                ? { ...f, hasPendingRequest: true }
+                : f
+            );
+          }
+          return [
+            {
+              id: payload.senderId,
+              linkupId: payload.senderLinkUpId,
+              name: payload.senderName,
+              username: payload.senderUsername,
+              avatar: payload.senderAvatar,
+              mutualFriends: 1,
+              status: 'online',
+              isFriend: false,
+              isFollowing: false,
+              hasPendingRequest: true,
+              hometown: 'LinkUp Network',
+            },
+            ...prev,
+          ];
+        });
+      }
+    });
+
+    // 6. Subscribe to Friend Request Accepted
+    const unsubReqAccepted = realtime.subscribe('FRIEND_REQUEST_ACCEPTED', (payload) => {
+      if (!payload || !user) return;
+      const isForMe =
+        (payload.recipientId && user.id && payload.recipientId === user.id) ||
+        (payload.recipientUsername && user.username && payload.recipientUsername.toLowerCase() === user.username.toLowerCase()) ||
+        (payload.recipientLinkUpId && user.linkupId && payload.recipientLinkUpId.toLowerCase() === user.linkupId.toLowerCase());
+
+      if (isForMe) {
+        setFriends((prev) =>
+          prev.map((f) =>
+            (f.id && f.id === payload.senderId) ||
+            (f.username && payload.senderUsername && f.username.toLowerCase() === payload.senderUsername.toLowerCase())
+              ? { ...f, isFriend: true, hasPendingRequest: false }
+              : f
+          )
+        );
+
+        setNotifications((prev) => [
+          {
+            id: `notif-acc-${Date.now()}`,
+            type: 'friend_request',
+            section: 'New',
+            user: {
+              id: payload.senderId,
+              name: payload.senderName,
+              username: payload.senderUsername,
+              avatar: payload.senderAvatar,
+              linkupId: payload.senderLinkUpId,
+            },
+            action: 'accepted your friend request!',
+            time: 'Just now',
+            read: false,
+            hasActions: false,
+          },
+          ...prev,
+        ]);
+      }
+    });
+
     return () => {
       unsubLiveStart();
       unsubLiveStop();
       unsubMessages();
       unsubStory();
+      unsubFriendReq();
+      unsubReqAccepted();
     };
   }, [user, activeLiveStreamToWatch]);
 
@@ -408,28 +558,83 @@ export const SocialProvider = ({ children }) => {
     );
   };
 
-  // Toggle friend follow
-  const toggleFollowFriend = (friendId) => {
-    setFriends((prev) =>
-      prev.map((f) => (f.id === friendId ? { ...f, isFollowing: !f.isFollowing } : f))
-    );
+  // Toggle friend follow / send real-time friend request
+  const toggleFollowFriend = (friendOrId) => {
+    const friendId = typeof friendOrId === 'string' ? friendOrId : friendOrId?.id;
+    const targetUser = typeof friendOrId === 'object' ? friendOrId : friends.find((f) => f.id === friendId);
+
+    setFriends((prev) => {
+      const exists = prev.some((f) => f.id === friendId);
+      if (exists) {
+        return prev.map((f) => (f.id === friendId ? { ...f, isFollowing: !f.isFollowing } : f));
+      } else if (targetUser) {
+        return [
+          {
+            id: targetUser.id,
+            linkupId: targetUser.linkupId,
+            name: targetUser.name,
+            username: targetUser.username,
+            avatar: targetUser.avatar,
+            mutualFriends: 1,
+            status: 'online',
+            isFriend: false,
+            isFollowing: true,
+            hometown: 'LinkUp Network',
+          },
+          ...prev,
+        ];
+      }
+      return prev;
+    });
+
+    // Broadcast real-time friend request across global network
+    if (targetUser && user) {
+      realtime.broadcast('NEW_FRIEND_REQUEST', {
+        id: `req-${Date.now()}`,
+        senderId: user.id,
+        senderName: user.name,
+        senderUsername: user.username,
+        senderAvatar: user.avatar,
+        senderLinkUpId: user.linkupId,
+        recipientId: targetUser.id,
+        recipientUsername: targetUser.username,
+        recipientLinkUpId: targetUser.linkupId,
+        timestamp: Date.now(),
+      });
+    }
   };
 
   // Confirm / Delete friend request
   const handleFriendRequest = (friendId, action) => {
+    const targetFriend = friends.find((f) => f.id === friendId || f.linkupId === friendId);
+
     if (action === 'confirm') {
       setFriends((prev) =>
-        prev.map((f) => (f.id === friendId ? { ...f, isFriend: true, hasPendingRequest: false } : f))
+        prev.map((f) => (f.id === friendId || f.linkupId === friendId ? { ...f, isFriend: true, hasPendingRequest: false } : f))
       );
+      if (user && targetFriend) {
+        realtime.broadcast('FRIEND_REQUEST_ACCEPTED', {
+          senderId: user.id,
+          senderName: user.name,
+          senderUsername: user.username,
+          senderAvatar: user.avatar,
+          senderLinkUpId: user.linkupId,
+          recipientId: targetFriend.id,
+          recipientUsername: targetFriend.username,
+          recipientLinkUpId: targetFriend.linkupId,
+        });
+      }
     } else {
       setFriends((prev) =>
-        prev.map((f) => (f.id === friendId ? { ...f, hasPendingRequest: false } : f))
+        prev.map((f) => (f.id === friendId || f.linkupId === friendId ? { ...f, hasPendingRequest: false } : f))
       );
     }
 
     setNotifications((prev) =>
       prev.map((n) =>
-        n.type === 'friend_request' ? { ...n, hasActions: false, action: action === 'confirm' ? 'is now your friend.' : 'request removed.' } : n
+        n.type === 'friend_request' && (n.user?.id === friendId || n.id === friendId)
+          ? { ...n, hasActions: false, action: action === 'confirm' ? 'is now your friend.' : 'request removed.' }
+          : n
       )
     );
   };

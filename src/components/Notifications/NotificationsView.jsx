@@ -15,7 +15,7 @@ export const NotificationsView = () => {
     return true;
   });
 
-  const newNotifs = filteredNotifs.filter((n) => n.section === 'New');
+  const newNotifs = filteredNotifs.filter((n) => n.section === 'New' || !n.section);
   const earlierNotifs = filteredNotifs.filter((n) => n.section === 'Earlier');
 
   return (
@@ -73,14 +73,14 @@ export const NotificationsView = () => {
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           type="button"
-                          onClick={() => handleFriendRequest('user-04', 'confirm')}
+                          onClick={() => handleFriendRequest(n.user?.id || n.id, 'confirm')}
                           className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition-all"
                         >
                           Confirm
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleFriendRequest('user-04', 'delete')}
+                          onClick={() => handleFriendRequest(n.user?.id || n.id, 'delete')}
                           className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-all"
                         >
                           Delete

@@ -382,7 +382,7 @@ export const ExploreView = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        toggleFollowFriend(person.id);
+                        toggleFollowFriend(person);
                         setFollowedIds((prev) => ({ ...prev, [person.id]: !prev[person.id] }));
                       }}
                       className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow ${

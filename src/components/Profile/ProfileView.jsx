@@ -13,6 +13,8 @@ import {
   MoreVertical,
   Edit,
   Trash2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
@@ -33,9 +35,18 @@ export const ProfileView = () => {
   const [isCreateHighlightOpen, setIsCreateHighlightOpen] = useState(false);
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [contextMenuHlId, setContextMenuHlId] = useState(null);
+  const [idCopied, setIdCopied] = useState(false);
 
   const user = authUser || CURRENT_USER;
   const highlights = user.highlights || CURRENT_USER.highlights;
+
+  const handleCopyId = () => {
+    if (user.linkupId) {
+      navigator.clipboard?.writeText(user.linkupId);
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 2000);
+    }
+  };
 
   const handleAddHighlight = (newHl) => {
     const updatedHighlights = [...highlights, newHl];
@@ -142,6 +153,40 @@ export const ProfileView = () => {
           >
             {user.website || `linkup.dev/${user.username}`}
           </a>
+        </div>
+
+        {/* LinkUp Official ID Badge */}
+        <div className="mx-2 p-3 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-blue-950/40 border border-purple-500/30 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md">
+              ID
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-extrabold tracking-wider text-purple-400">Official LinkUp ID</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
+              <p className="text-xs font-mono font-black text-white tracking-wider">{user.linkupId || 'LK-84920'}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCopyId}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-purple-300 flex items-center gap-1.5 transition-all active:scale-95 shadow"
+          >
+            {idCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                <span className="text-emerald-400">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy ID</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Action Buttons */}

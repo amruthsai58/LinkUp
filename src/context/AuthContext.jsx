@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { realtime } from '../services/realtimeService';
 
 const AuthContext = createContext();
 
@@ -8,6 +9,17 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+// Helper to generate a standardized LinkUp ID
+export const generateLinkUpId = (username = 'user') => {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = (hash << 5) - hash + username.charCodeAt(i);
+    hash |= 0;
+  }
+  const numeric = Math.abs(hash) % 90000 + 10000;
+  return `LK-${numeric}`;
 };
 
 // Password strength calculation helper
@@ -52,6 +64,9 @@ export const AuthProvider = ({ children }) => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.username !== 'ashok.lingaraddi') {
+          if (!parsed.linkupId) {
+            parsed.linkupId = generateLinkUpId(parsed.username);
+          }
           return parsed;
         }
       }
@@ -74,12 +89,18 @@ export const AuthProvider = ({ children }) => {
   const [googleAuthModalOpen, setGoogleAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
 
-  // Persist logged-in user session safely
+  // Persist logged-in user session safely and connect to Realtime Network
   useEffect(() => {
     try {
       if (user) {
+        // Guarantee linkupId exists
+        if (!user.linkupId) {
+          user.linkupId = generateLinkUpId(user.username);
+        }
         localStorage.setItem('linkup_auth_user', JSON.stringify(user));
         setIsAuthenticated(true);
+        // Connect to WebRTC P2P and Broadcast network
+        realtime.init(user);
       } else {
         localStorage.removeItem('linkup_auth_user');
         setIsAuthenticated(false);
@@ -104,19 +125,27 @@ export const AuthProvider = ({ children }) => {
     const foundUser = savedDb.find(
       (u) =>
         u.username?.toLowerCase() === cleanIdentifier.toLowerCase() ||
-        u.email?.toLowerCase() === cleanIdentifier.toLowerCase()
+        u.email?.toLowerCase() === cleanIdentifier.toLowerCase() ||
+        u.linkupId?.toLowerCase() === cleanIdentifier.toLowerCase()
     );
 
     if (!foundUser) {
-      throw new Error('No account found with this email/username. Please create an account first.');
+      throw new Error('No account found with this email/username/ID. Please create an account first.');
     }
 
-    if (foundUser.password && foundUser.password !== password) {
+    if (foundUser.password && password && foundUser.password !== password) {
       throw new Error('Incorrect password. Please try again.');
+    }
+
+    if (!foundUser.linkupId) {
+      foundUser.linkupId = generateLinkUpId(foundUser.username);
     }
 
     setUser(foundUser);
     setIsAuthenticated(true);
+    try {
+      localStorage.setItem('linkup_auth_user', JSON.stringify(foundUser));
+    } catch {}
     setAuthModalOpen(false);
     setGoogleAuthModalOpen(false);
     return foundUser;
@@ -150,8 +179,11 @@ export const AuthProvider = ({ children }) => {
       throw new Error('An account with this email or username already exists. Please log in.');
     }
 
+    const uniqueId = generateLinkUpId(cleanUsername);
+
     const newUser = {
       id: `user-${Date.now()}`,
+      linkupId: uniqueId,
       name: cleanName,
       username: cleanUsername,
       email: cleanEmail,
@@ -188,7 +220,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     savedDb.unshift(newUser);
-    localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+    try {
+      localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+      localStorage.setItem('linkup_auth_user', JSON.stringify(newUser));
+    } catch {}
 
     setUser(newUser);
     setIsAuthenticated(true);
@@ -213,6 +248,7 @@ export const AuthProvider = ({ children }) => {
     if (!googleUser) {
       googleUser = {
         id: `google-${Date.now()}`,
+        linkupId: generateLinkUpId(username),
         name: name.charAt(0).toUpperCase() + name.slice(1),
         username: username,
         email: email,
@@ -244,8 +280,18 @@ export const AuthProvider = ({ children }) => {
         },
       };
       savedDb.unshift(googleUser);
-      localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+      try {
+        localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+      } catch {}
     }
+
+    if (!googleUser.linkupId) {
+      googleUser.linkupId = generateLinkUpId(googleUser.username);
+    }
+
+    try {
+      localStorage.setItem('linkup_auth_user', JSON.stringify(googleUser));
+    } catch {}
 
     setUser(googleUser);
     setIsAuthenticated(true);
@@ -307,6 +353,23 @@ export const AuthProvider = ({ children }) => {
     }));
   };
 
+  // Find users in the registered network by query (username, name, or linkupId)
+  const searchRegisteredUsers = (query) => {
+    if (!query || !query.trim()) return [];
+    const clean = query.trim().toLowerCase();
+    try {
+      const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      return savedDb.filter(
+        (u) =>
+          u.username?.toLowerCase().includes(clean) ||
+          u.name?.toLowerCase().includes(clean) ||
+          u.linkupId?.toLowerCase().includes(clean)
+      );
+    } catch {
+      return [];
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -324,6 +387,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         updateUserProfile,
         toggle2FA,
+        searchRegisteredUsers,
       }}
     >
       {children}

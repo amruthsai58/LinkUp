@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
+import { realtime } from '../../services/realtimeService';
 
 export const LiveStreamModal = ({ isOpen, onClose }) => {
   const { user } = useAuth();
@@ -67,33 +68,39 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
     };
   }, [isOpen]);
 
-  // Viewer simulation
+  // Start / Stop broadcast and listen to real-time viewer interactions
   useEffect(() => {
     if (!isLive) return;
 
-    const interval = setInterval(() => {
-      setViewersCount((prev) => prev + Math.floor(Math.random() * 7) - 3);
+    const streamInfo = {
+      id: `stream-${Date.now()}`,
+      broadcasterId: activeUser.id,
+      broadcasterName: activeUser.name,
+      broadcasterAvatar: activeUser.avatar,
+      title: streamTitle,
+      linkupId: activeUser.linkupId,
+    };
 
-      const sampleComments = [
-        'Awesome setup! 👏',
-        'Can you show the terminal? 💻',
-        'Love the background music 🎵',
-        'LinkUp is looking clean! 🔥',
-        '❤️ ❤️ ❤️',
-      ];
-      const randomUser = ['Vikram', 'Sneha', 'Arun', 'Pooja', 'Tanvi'][
-        Math.floor(Math.random() * 5)
-      ];
-      const randomText = sampleComments[Math.floor(Math.random() * sampleComments.length)];
+    realtime.startLiveBroadcast(streamRef.current, streamInfo);
 
-      setChatMessages((prev) => [
-        ...prev.slice(-12),
-        { id: Date.now(), user: randomUser, text: randomText },
-      ]);
-    }, 2400);
+    // Subscribe to incoming comments from real viewers
+    const unsubComment = realtime.subscribe('LIVE_STREAM_COMMENT', (payload) => {
+      if (payload && payload.comment) {
+        setChatMessages((prev) => [...prev.slice(-25), payload.comment]);
+      }
+    });
 
-    return () => clearInterval(interval);
-  }, [isLive]);
+    // Subscribe to incoming hearts from real viewers
+    const unsubHeart = realtime.subscribe('LIVE_STREAM_HEART', () => {
+      triggerHeartBurst();
+    });
+
+    return () => {
+      unsubComment();
+      unsubHeart();
+      realtime.stopLiveBroadcast(activeUser.id);
+    };
+  }, [isLive, streamTitle, activeUser]);
 
   if (!isOpen) return null;
 

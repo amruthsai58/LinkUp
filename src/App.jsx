@@ -21,9 +21,15 @@ import { GoogleAuthModal } from './components/Auth/GoogleAuthModal';
 import { CreatePostModal } from './components/Feed/CreatePostModal';
 import { StoryViewerModal } from './components/Stories/StoryViewerModal';
 import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
+import { LiveViewerModal } from './components/Feed/LiveViewerModal';
 
 const MainAppContent = () => {
-  const { activeTab } = useSocial();
+  const {
+    activeTab,
+    isLiveViewerOpen,
+    activeLiveStreamToWatch,
+    setIsLiveViewerOpen,
+  } = useSocial();
   const { user, isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
 
@@ -79,6 +85,11 @@ const MainAppContent = () => {
       <CreatePostModal />
       <StoryViewerModal />
       <StoryCreatorModal />
+      <LiveViewerModal
+        isOpen={isLiveViewerOpen}
+        liveStream={activeLiveStreamToWatch}
+        onClose={() => setIsLiveViewerOpen(false)}
+      />
     </div>
   );
 };

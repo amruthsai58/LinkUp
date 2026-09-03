@@ -11,8 +11,10 @@ import {
   TrendingUp,
   ChevronRight,
   X,
+  MessageCircle,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
+import { useAuth } from '../../context/AuthContext';
 import { PostCard } from '../Feed/PostCard';
 
 export const ExploreView = () => {
@@ -24,7 +26,9 @@ export const ExploreView = () => {
     searchCategory,
     setSearchCategory,
     setActiveTab,
+    openChatWithUser,
   } = useSocial();
+  const { searchRegisteredUsers, user: authUser } = useAuth();
 
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState(null);
@@ -45,13 +49,30 @@ export const ExploreView = () => {
 
   const cleanQuery = query.replace(/^#/, '').toLowerCase().trim();
 
-  // Filters with normalized hashtag search
-  const filteredPeople = friends.filter(
-    (f) =>
-      !cleanQuery ||
-      f.name.toLowerCase().includes(cleanQuery) ||
-      f.username.toLowerCase().includes(cleanQuery)
+  // Real-time lookup of registered accounts across the LinkUp network + friends
+  const registeredMatches = searchRegisteredUsers(cleanQuery).filter(
+    (u) => !authUser || u.id !== authUser.id
   );
+
+  const combinedPeople = [
+    ...registeredMatches.map((u) => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      linkupId: u.linkupId || 'LK-NEW',
+      avatar: u.avatar,
+      isRegisteredUser: true,
+      isFollowing: false,
+    })),
+    ...friends.filter(
+      (f) =>
+        (!cleanQuery ||
+          f.name.toLowerCase().includes(cleanQuery) ||
+          f.username.toLowerCase().includes(cleanQuery) ||
+          (f.linkupId && f.linkupId.toLowerCase().includes(cleanQuery))) &&
+        !registeredMatches.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
+    ),
+  ];
 
   const filteredPosts = posts.filter((p) => {
     if (selectedTag) {
@@ -328,34 +349,53 @@ export const ExploreView = () => {
           </div>
 
           <div className="flex flex-col gap-2">
-            {filteredPeople.slice(0, searchCategory === 'All' ? 4 : 20).map((person) => (
+            {combinedPeople.slice(0, searchCategory === 'All' ? 5 : 30).map((person) => (
               <div
                 key={person.id}
-                className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900/80 border border-slate-800/90 hover:border-slate-700 transition-colors gap-2"
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <img
-                    src={person.avatar}
+                    src={person.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
                     alt={person.name}
-                    className="w-11 h-11 rounded-full object-cover border border-slate-700"
+                    className="w-11 h-11 rounded-full object-cover border border-purple-500/40 flex-shrink-0"
                   />
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold text-white truncate">{person.name}</h4>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-xs font-bold text-white truncate">{person.name}</h4>
+                      {person.linkupId && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-500/40 text-[9px] font-mono font-bold text-purple-300">
+                          {person.linkupId}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-slate-400 truncate">@{person.username}</p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleFollowFriend(person.id)}
-                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    person.isFollowing
-                      ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
-                  }`}
-                >
-                  {person.isFollowing ? 'Following' : 'Follow'}
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openChatWithUser(person)}
+                    className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center gap-1 transition-all active:scale-95"
+                    title="Send Message"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span className="hidden sm:inline">Message</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleFollowFriend(person.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      person.isFollowing
+                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
+                    }`}
+                  >
+                    {person.isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

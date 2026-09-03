@@ -10,9 +10,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
+import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const DirectChatView = () => {
+  const { user } = useAuth();
   const { activeConversation, sendDirectMessage, setActiveTab } = useSocial();
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
@@ -64,8 +66,18 @@ export const DirectChatView = () => {
           />
 
           <div>
-            <h3 className="text-sm font-bold text-white">{conv.friend.name}</h3>
-            <p className="text-[10px] text-emerald-400 font-medium">Active now</p>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-white">{conv.friend.name}</h3>
+              {conv.friend.linkupId && (
+                <span className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-500/40 text-[9px] font-mono font-bold text-purple-300">
+                  {conv.friend.linkupId}
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active now
+            </p>
           </div>
         </div>
 
@@ -101,7 +113,7 @@ export const DirectChatView = () => {
         </div>
 
         {conv.messages.map((m) => {
-          const isMe = m.senderId === CURRENT_USER.id || m.senderId === 'user-01';
+          const isMe = user ? m.senderId === user.id : (m.senderId === CURRENT_USER.id || m.senderId === 'user-01');
 
           return (
             <div

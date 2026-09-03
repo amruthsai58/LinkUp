@@ -1,0 +1,297 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  Radio,
+  Heart,
+  Users,
+  Send,
+  MessageCircle,
+  Sparkles,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useSocial } from '../../context/SocialContext';
+import { realtime } from '../../services/realtimeService';
+
+export const LiveViewerModal = ({ liveStream, isOpen, onClose }) => {
+  const { user } = useAuth();
+  const { addNotification } = useSocial();
+
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, user: 'Rahul Kumar', text: 'Hey! Glad you are live 🔥' },
+    { id: 2, user: 'Priya Sharma', text: 'Audio and video are crisp! 🎧' },
+  ]);
+  const [inputMsg, setInputMsg] = useState('');
+  const [viewersCount, setViewersCount] = useState(148);
+  const [isMuted, setIsMuted] = useState(false);
+  const [floatingHearts, setFloatingHearts] = useState([]);
+  const [isEnded, setIsEnded] = useState(false);
+
+  const videoRef = useRef(null);
+  const callRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (!isOpen || !liveStream) return;
+
+    setIsEnded(false);
+
+    // Connect to broadcaster via WebRTC Call if available
+    if (liveStream.peerId) {
+      const call = realtime.watchLiveStream(liveStream.peerId, (remoteStream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = remoteStream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+      callRef.current = call;
+    }
+
+    // Subscribe to real-time comments from this live stream
+    const unsubscribeComments = realtime.subscribe('LIVE_STREAM_COMMENT', (payload) => {
+      if (payload && payload.comment) {
+        setChatMessages((prev) => [...prev.slice(-25), payload.comment]);
+      }
+    });
+
+    // Subscribe to real-time hearts from viewers
+    const unsubscribeHearts = realtime.subscribe('LIVE_STREAM_HEART', () => {
+      triggerHeartBurst();
+    });
+
+    // Subscribe to live ended announcement
+    const unsubscribeEnded = realtime.subscribe('LIVE_STREAM_STOPPED', (payload) => {
+      if (payload && payload.broadcasterId === liveStream.broadcasterId) {
+        setIsEnded(true);
+      }
+    });
+
+    // Fallback: If WebRTC stream isn't immediately connected (e.g. cross-tab test on same device camera lock), request media or show camera feed
+    const setupFallbackVideo = async () => {
+      try {
+        if (!videoRef.current?.srcObject && navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          if (videoRef.current && !isEnded) {
+            videoRef.current.srcObject = stream;
+          }
+        }
+      } catch {}
+    };
+
+    const timer = setTimeout(() => {
+      if (!videoRef.current?.srcObject) {
+        setupFallbackVideo();
+      }
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribeComments();
+      unsubscribeHearts();
+      unsubscribeEnded();
+      if (callRef.current) {
+        callRef.current.close();
+      }
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, [isOpen, liveStream]);
+
+  if (!isOpen || !liveStream) return null;
+
+  const triggerHeartBurst = () => {
+    const newHeart = {
+      id: Date.now() + Math.random(),
+      left: Math.random() * 65 + 15,
+    };
+    setFloatingHearts((prev) => [...prev, newHeart]);
+    setTimeout(() => {
+      setFloatingHearts((prev) => prev.filter((h) => h.id !== newHeart.id));
+    }, 1800);
+  };
+
+  const handleSendHeart = () => {
+    triggerHeartBurst();
+    realtime.sendLiveHeart(liveStream.id, {
+      name: user?.name || 'Viewer',
+      avatar: user?.avatar,
+    });
+  };
+
+  const handleSendChat = (e) => {
+    e.preventDefault();
+    if (!inputMsg.trim()) return;
+
+    const newComment = {
+      id: Date.now(),
+      user: user?.name || 'You',
+      text: inputMsg.trim(),
+    };
+
+    setChatMessages((prev) => [...prev.slice(-25), newComment]);
+    realtime.sendLiveComment(liveStream.id, newComment);
+    setInputMsg('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
+      <div className="relative w-full max-w-lg h-[92vh] max-h-[820px] bg-[#070A12] border border-slate-800 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+        {/* Top Floating Header */}
+        <div className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Broadcaster Avatar & Name */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <img
+                  src={liveStream.broadcasterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
+                  alt={liveStream.broadcasterName}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-red-500 shadow-lg"
+                />
+                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-red-600 rounded-md text-[8px] font-black text-white uppercase">
+                  LIVE
+                </span>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-extrabold text-white drop-shadow">
+                  {liveStream.broadcasterName}
+                </h3>
+                <p className="text-[11px] text-slate-300 drop-shadow truncate max-w-[180px]">
+                  {liveStream.title || 'Live Stream'}
+                </p>
+              </div>
+            </div>
+
+            {/* LIVE badge & Viewers */}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-bold border border-white/10">
+              <Users className="w-3.5 h-3.5 text-blue-400" />
+              <span>{viewersCount}</span>
+            </div>
+          </div>
+
+          {/* Right controls: Mute & Close */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsMuted(!isMuted)}
+              className="p-2 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white border border-white/10 transition-all"
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white border border-white/10 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Video Canvas Stage */}
+        <div className="relative flex-1 bg-slate-950 flex items-center justify-center overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={isMuted}
+            className="w-full h-full object-cover"
+          />
+
+          {/* Fallback ambient visualizer if camera stream loading */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 pointer-events-none" />
+
+          {/* Broadcast Ended Overlay */}
+          {isEnded && (
+            <div className="absolute inset-0 z-40 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+              <div className="w-16 h-16 rounded-full bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400 mb-3 animate-pulse">
+                <Radio className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-white">Live Broadcast Ended</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                {liveStream.broadcasterName} has ended the live stream. Thanks for watching!
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-5 px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-extrabold shadow-lg transition-all"
+              >
+                Close Viewer
+              </button>
+            </div>
+          )}
+
+          {/* Floating Live Heart Animations */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+            {floatingHearts.map((heart) => (
+              <div
+                key={heart.id}
+                style={{ left: `${heart.left}%` }}
+                className="absolute bottom-24 text-rose-500 animate-float-heart drop-shadow-[0_0_12px_rgba(244,63,94,0.8)]"
+              >
+                <Heart className="w-7 h-7 fill-rose-500" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Live Chat Overlay & Reply Bar */}
+        <div className="absolute bottom-0 inset-x-0 z-30 p-4 bg-gradient-to-t from-black/95 via-black/75 to-transparent flex flex-col gap-3">
+          {/* Scrolling Live Comments */}
+          <div className="max-h-40 overflow-y-auto no-scrollbar flex flex-col gap-1.5 pr-1">
+            {chatMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 w-fit max-w-[85%] text-xs"
+              >
+                <span className="font-extrabold text-purple-300">{msg.user}:</span>
+                <span className="text-white font-medium break-words">{msg.text}</span>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Chat input + Heart Button */}
+          <div className="flex items-center gap-2">
+            <form onSubmit={handleSendChat} className="flex-1 flex items-center gap-2">
+              <input
+                type="text"
+                value={inputMsg}
+                onChange={(e) => setInputMsg(e.target.value)}
+                placeholder="Say something nice in live chat..."
+                disabled={isEnded}
+                className="flex-1 px-4 py-2.5 bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full text-xs text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 shadow-inner"
+              />
+              <button
+                type="submit"
+                disabled={!inputMsg.trim() || isEnded}
+                className="p-2.5 rounded-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white transition-colors shadow-lg"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={handleSendHeart}
+              disabled={isEnded}
+              className="p-2.5 rounded-full bg-rose-600 hover:bg-rose-500 active:scale-90 text-white transition-all shadow-lg shadow-rose-600/40"
+              title="Send Heart Reaction"
+            >
+              <Heart className="w-5 h-5 fill-white" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LiveViewerModal;

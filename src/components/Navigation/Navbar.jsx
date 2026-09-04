@@ -13,6 +13,7 @@ export const Navbar = () => {
     setActiveTab,
     notifications,
     conversations,
+    setIsSearchActive,
   } = useSocial();
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
@@ -30,8 +31,9 @@ export const Navbar = () => {
         {/* Center: Find by LinkUp ID Quick Button */}
         <button
           type="button"
-          onClick={() => setActiveTab('search')}
+          onClick={() => setIsSearchActive(true)}
           className="px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-purple-950/40 border border-slate-700/80 hover:border-purple-500/50 text-slate-300 hover:text-purple-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm group"
+          title="Open Search Bar (Enter LinkUp ID, Name, Song)"
         >
           <Search className="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform" />
           <span className="hidden sm:inline">Enter LinkUp ID (LK-...)</span>

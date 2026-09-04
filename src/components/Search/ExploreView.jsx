@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Users,
@@ -44,6 +44,11 @@ export const ExploreView = () => {
   const [selectedTag, setSelectedTag] = useState(null);
   const [syncTick, setSyncTick] = useState(0);
   const [cloudUsers, setCloudUsers] = useState(() => realtime.getRegisteredUsers());
+  const exploreInputRef = useRef(null);
+
+  useEffect(() => {
+    exploreInputRef.current?.focus();
+  }, []);
 
   // Persistent following state
   const [followedUsers, setFollowedUsers] = useState(() => {
@@ -302,6 +307,7 @@ export const ExploreView = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
             <input
+              ref={exploreInputRef}
               type="text"
               value={query}
               onChange={(e) => {

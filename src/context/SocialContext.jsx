@@ -190,6 +190,7 @@ export const SocialProvider = ({ children }) => {
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCategory, setSearchCategory] = useState('All');
+  const [isSearchActive, setIsSearchActive] = useState(false);
 
   // Real-time Event Subscriptions (Live Streams & Direct Messages)
   useEffect(() => {
@@ -1392,6 +1393,8 @@ export const SocialProvider = ({ children }) => {
         setSearchQuery,
         searchCategory,
         setSearchCategory,
+        isSearchActive,
+        setIsSearchActive,
         addPost,
         deletePost,
         reactToPost,

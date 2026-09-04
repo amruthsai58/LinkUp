@@ -24,6 +24,7 @@ import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
 import { LiveViewerModal } from './components/Feed/LiveViewerModal';
 import { LiveStreamModal } from './components/Feed/LiveStreamModal';
 import { SettingsModal } from './components/Settings/SettingsModal';
+import { GlobalSearchModal } from './components/Search/GlobalSearchModal';
 
 const MainAppContent = () => {
   const {
@@ -99,6 +100,7 @@ const MainAppContent = () => {
         isOpen={isLiveBroadcasterOpen}
         onClose={() => setIsLiveBroadcasterOpen(false)}
       />
+      <GlobalSearchModal />
     </div>
   );
 };

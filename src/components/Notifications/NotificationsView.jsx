@@ -8,7 +8,24 @@ export const NotificationsView = () => {
 
   const FILTERS = ['All', 'Unread', 'Mentions', 'Friends'];
 
-  const filteredNotifs = notifications.filter((n) => {
+  // Strictly deduplicate notifications to ensure a single notification per event
+  const deduplicatedNotifs = [];
+  const seenNotificationKeys = new Set();
+  notifications.forEach((n) => {
+    const username = (n.user?.username || n.user?.id || '').toLowerCase();
+    const actionKey = (n.action || n.text || '').toLowerCase().replace(/[^a-z]/g, '');
+    const dedupKey =
+      n.type === 'friend_request'
+        ? `freq_${username}_${actionKey.includes('accept') ? 'accept' : 'req'}`
+        : (n.id || `${n.type}_${username}_${actionKey}`);
+
+    if (!seenNotificationKeys.has(dedupKey)) {
+      seenNotificationKeys.add(dedupKey);
+      deduplicatedNotifs.push(n);
+    }
+  });
+
+  const filteredNotifs = deduplicatedNotifs.filter((n) => {
     if (activeFilter === 'Unread') return !n.read;
     if (activeFilter === 'Mentions') return n.type === 'mention';
     if (activeFilter === 'Friends') return n.type === 'friend_request';

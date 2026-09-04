@@ -65,8 +65,12 @@ class RealtimeService {
             if (data && data.message) {
               const parsed = JSON.parse(data.message);
               if (parsed.type && parsed.payload) {
-                // Historical playback should only populate cache, not trigger live notifications or duplicate message alerts
-                const isLiveAlert = parsed.type !== 'NEW_DIRECT_MESSAGE' && parsed.type !== 'UNSEND_DIRECT_MESSAGE';
+                // Historical playback should only populate cache, not trigger live notifications or duplicate alerts
+                const isLiveAlert =
+                  parsed.type !== 'NEW_DIRECT_MESSAGE' &&
+                  parsed.type !== 'UNSEND_DIRECT_MESSAGE' &&
+                  parsed.type !== 'NEW_FRIEND_REQUEST' &&
+                  parsed.type !== 'FRIEND_REQUEST_ACCEPTED';
                 this.handleIncomingPayload(parsed.type, parsed.payload, isLiveAlert);
               }
             }
@@ -137,15 +141,28 @@ class RealtimeService {
       } catch {}
     }
 
-    // 3. Persist incoming friend requests into cloud cache
+    // 3. Persist incoming friend requests into cloud cache with deduplication
     if (type === 'NEW_FRIEND_REQUEST' && payload && payload.recipientUsername) {
+      const freqKey = `freq_${(payload.senderUsername || payload.senderId || '').toLowerCase()}_${(payload.recipientUsername || '').toLowerCase()}`;
+      if (this.processedMessageIds.has(freqKey)) {
+        return; // Already processed!
+      }
+      this.processedMessageIds.add(freqKey);
       try {
         const reqs = JSON.parse(localStorage.getItem('linkup_cloud_friend_requests') || '[]');
-        if (!reqs.some((r) => r.id === payload.id || (r.senderUsername === payload.senderUsername && r.recipientUsername === payload.recipientUsername && r.timestamp === payload.timestamp))) {
+        if (!reqs.some((r) => r.senderUsername?.toLowerCase() === payload.senderUsername?.toLowerCase() && r.recipientUsername?.toLowerCase() === payload.recipientUsername?.toLowerCase())) {
           reqs.unshift(payload);
           localStorage.setItem('linkup_cloud_friend_requests', JSON.stringify(reqs));
         }
       } catch {}
+    }
+
+    if (type === 'FRIEND_REQUEST_ACCEPTED' && payload) {
+      const faccKey = `facc_${(payload.senderUsername || payload.senderId || '').toLowerCase()}_${(payload.recipientUsername || '').toLowerCase()}`;
+      if (this.processedMessageIds.has(faccKey)) {
+        return; // Already processed!
+      }
+      this.processedMessageIds.add(faccKey);
     }
 
     // 4. Persist incoming messages into cloud cache with deduplication

@@ -89,7 +89,24 @@ export const SocialProvider = ({ children }) => {
       const saved = localStorage.getItem('linkup_notifications');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Strictly deduplicate existing saved notifications
+          const deduped = [];
+          const seen = new Set();
+          for (const n of parsed) {
+            const username = (n.user?.username || n.user?.id || '').toLowerCase();
+            const actionKey = (n.action || n.text || '').toLowerCase().replace(/[^a-z]/g, '');
+            const key = n.type === 'friend_request'
+              ? `freq_${username}_${actionKey.includes('accept') ? 'accept' : 'req'}`
+              : (n.id || `${n.type}_${username}_${actionKey}`);
+
+            if (!seen.has(key)) {
+              seen.add(key);
+              deduped.push(n);
+            }
+          }
+          return deduped;
+        }
       }
     } catch {}
     return INITIAL_NOTIFICATIONS;
@@ -390,6 +407,7 @@ export const SocialProvider = ({ children }) => {
     });
 
     // 5. Subscribe to Real-Time Friend Requests & Follows
+    // 5. Subscribe to Real-Time Friend Requests & Follows
     const unsubFriendReq = realtime.subscribe('NEW_FRIEND_REQUEST', (payload) => {
       if (!payload || !user) return;
       const isForMe =
@@ -398,8 +416,19 @@ export const SocialProvider = ({ children }) => {
         (payload.recipientLinkUpId && user.linkupId && payload.recipientLinkUpId.toLowerCase() === user.linkupId.toLowerCase());
 
       if (isForMe) {
+        // Prevent loopback if sender is me
+        if (
+          payload.senderId === user.id ||
+          (payload.senderUsername && user.username && payload.senderUsername.toLowerCase() === user.username.toLowerCase())
+        ) {
+          return;
+        }
+
+        const senderUsername = (payload.senderUsername || '').toLowerCase();
+        const reqNotifId = `notif-freq-${senderUsername || payload.senderId}`;
+
         const newNotif = {
-          id: payload.id || `notif-req-${Date.now()}`,
+          id: reqNotifId,
           type: 'friend_request',
           section: 'New',
           user: {
@@ -415,7 +444,22 @@ export const SocialProvider = ({ children }) => {
           hasActions: true,
         };
 
-        setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+        setNotifications((prev) => {
+          // Remove ANY prior request notification from this sender, ensuring strictly only 1 exists
+          const filtered = prev.filter((n) => {
+            if (n.id === reqNotifId) return false;
+            const nUser = (n.user?.username || n.user?.id || '').toLowerCase();
+            if (
+              n.type === 'friend_request' &&
+              n.action?.includes('sent you a friend request') &&
+              (nUser === senderUsername || (payload.senderId && n.user?.id === payload.senderId))
+            ) {
+              return false;
+            }
+            return true;
+          });
+          return [newNotif, ...filtered];
+        });
 
         setFriends((prev) => {
           const exists = prev.some(
@@ -469,25 +513,41 @@ export const SocialProvider = ({ children }) => {
           )
         );
 
-        setNotifications((prev) => [
-          {
-            id: `notif-acc-${Date.now()}`,
-            type: 'friend_request',
-            section: 'New',
-            user: {
-              id: payload.senderId,
-              name: payload.senderName,
-              username: payload.senderUsername,
-              avatar: payload.senderAvatar,
-              linkupId: payload.senderLinkUpId,
-            },
-            action: 'accepted your friend request!',
-            time: 'Just now',
-            read: false,
-            hasActions: false,
+        const senderUsername = (payload.senderUsername || '').toLowerCase();
+        const accNotifId = `notif-facc-${senderUsername || payload.senderId}`;
+
+        const newNotif = {
+          id: accNotifId,
+          type: 'friend_request',
+          section: 'New',
+          user: {
+            id: payload.senderId,
+            name: payload.senderName,
+            username: payload.senderUsername,
+            avatar: payload.senderAvatar,
+            linkupId: payload.senderLinkUpId,
           },
-          ...prev,
-        ]);
+          action: 'accepted your friend request!',
+          time: 'Just now',
+          read: false,
+          hasActions: false,
+        };
+
+        setNotifications((prev) => {
+          const filtered = prev.filter((n) => {
+            if (n.id === accNotifId) return false;
+            const nUser = (n.user?.username || n.user?.id || '').toLowerCase();
+            if (
+              n.type === 'friend_request' &&
+              n.action?.includes('accepted') &&
+              (nUser === senderUsername || (payload.senderId && n.user?.id === payload.senderId))
+            ) {
+              return false;
+            }
+            return true;
+          });
+          return [newNotif, ...filtered];
+        });
       }
     });
 
@@ -1036,12 +1096,24 @@ export const SocialProvider = ({ children }) => {
       );
     }
 
+    const targetUsername = targetFriend?.username?.toLowerCase();
     setNotifications((prev) =>
-      prev.map((n) =>
-        n.type === 'friend_request' && (n.user?.id === friendId || n.id === friendId)
-          ? { ...n, hasActions: false, action: action === 'confirm' ? 'is now your friend.' : 'request removed.' }
-          : n
-      )
+      prev.map((n) => {
+        const nUsername = (n.user?.username || '').toLowerCase();
+        const isMatch =
+          n.type === 'friend_request' &&
+          (n.user?.id === friendId ||
+           n.id === friendId ||
+           (targetUsername && nUsername === targetUsername));
+
+        return isMatch
+          ? {
+              ...n,
+              hasActions: false,
+              action: action === 'confirm' ? 'is now your friend.' : 'request removed.',
+            }
+          : n;
+      })
     );
   };
 

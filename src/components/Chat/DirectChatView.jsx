@@ -8,6 +8,11 @@ import {
   Smile,
   Send,
   Sparkles,
+  Check,
+  CheckCheck,
+  Trash2,
+  RotateCcw,
+  MoreVertical,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
@@ -15,11 +20,25 @@ import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const DirectChatView = () => {
   const { user } = useAuth();
-  const { activeConversation, sendDirectMessage, setActiveTab } = useSocial();
+  const {
+    activeConversation,
+    sendDirectMessage,
+    unsendMessage,
+    markConversationAsSeen,
+    setActiveTab,
+  } = useSocial();
   const [inputText, setInputText] = useState('');
+  const [unsendConfirmId, setUnsendConfirmId] = useState(null);
   const messagesEndRef = useRef(null);
 
   const conv = activeConversation;
+
+  // Mark all unread incoming messages as seen as soon as user opens or views this chat
+  useEffect(() => {
+    if (conv?.id) {
+      markConversationAsSeen(conv.id);
+    }
+  }, [conv?.id, conv?.messages?.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,6 +49,12 @@ export const DirectChatView = () => {
     if (!inputText.trim() || !conv) return;
     sendDirectMessage(conv.id, inputText);
     setInputText('');
+  };
+
+  const handleUnsend = (messageId) => {
+    if (!conv || !messageId) return;
+    unsendMessage(conv.id, messageId);
+    setUnsendConfirmId(null);
   };
 
   if (!conv) {
@@ -112,13 +137,14 @@ export const DirectChatView = () => {
           </span>
         </div>
 
-        {conv.messages.map((m) => {
+        {conv.messages.map((m, idx) => {
           const isMe = user ? m.senderId === user.id : (m.senderId === CURRENT_USER.id || m.senderId === 'user-01');
+          const isLastMessage = idx === conv.messages.length - 1;
 
           return (
             <div
-              key={m.id}
-              className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
+              key={m.id || idx}
+              className={`relative group flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
             >
               {!isMe && (
                 <img
@@ -128,21 +154,81 @@ export const DirectChatView = () => {
                 />
               )}
 
-              <div
-                className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-md ${
-                  isMe
-                    ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 text-white rounded-br-sm'
-                    : 'bg-slate-800/90 text-slate-100 rounded-bl-sm border border-slate-700/60'
-                }`}
-              >
-                <p className="whitespace-pre-line">{m.text}</p>
-                <span
-                  className={`block text-[9px] mt-1 ${
-                    isMe ? 'text-purple-200 text-right' : 'text-slate-400'
+              {/* Unsend button for sent messages (visible on hover or tap) */}
+              {isMe && (
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center self-center mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setUnsendConfirmId(unsendConfirmId === m.id ? null : m.id)}
+                    className="p-1.5 rounded-full hover:bg-slate-800/80 text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Unsend message"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Unsend Confirmation Popup */}
+              {unsendConfirmId === m.id && (
+                <div className="absolute -top-12 right-2 bg-[#0E1322] border border-red-500/40 rounded-2xl p-2 px-3 shadow-2xl z-30 flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150">
+                  <span className="text-[11px] text-slate-200 font-semibold">Unsend for everyone?</span>
+                  <button
+                    type="button"
+                    onClick={() => handleUnsend(m.id)}
+                    className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[10px] font-bold shadow transition-all"
+                  >
+                    Unsend
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnsendConfirmId(null)}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col items-end max-w-[78%]">
+                <div
+                  className={`w-full px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-md ${
+                    isMe
+                      ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 text-white rounded-br-sm'
+                      : 'bg-slate-800/90 text-slate-100 rounded-bl-sm border border-slate-700/60'
                   }`}
                 >
-                  {m.time}
-                </span>
+                  <p className="whitespace-pre-line">{m.text}</p>
+                  <div
+                    className={`flex items-center gap-1.5 text-[9px] mt-1 ${
+                      isMe ? 'text-purple-200 justify-end' : 'text-slate-400 justify-start'
+                    }`}
+                  >
+                    <span>{m.time}</span>
+                    {/* Seen Status Indicator for sender */}
+                    {isMe && (
+                      <span className="inline-flex items-center gap-0.5">
+                        {m.seen ? (
+                          <span className="inline-flex items-center gap-0.5 text-sky-300 font-bold" title={`Seen ${m.seenTime ? `at ${m.seenTime}` : ''}`}>
+                            <CheckCheck className="w-3.5 h-3.5 text-sky-300 stroke-[2.5]" />
+                            <span className="text-[8px] uppercase tracking-wider">Seen</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center text-purple-200/70" title="Sent">
+                            <Check className="w-3.5 h-3.5 text-purple-200/70 stroke-[2]" />
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Prominent Seen Tag for latest message */}
+                {isMe && isLastMessage && m.seen && (
+                  <div className="text-[10px] text-sky-400 font-bold flex items-center gap-1 mt-1 mr-1 animate-in fade-in">
+                    <CheckCheck className="w-3 h-3 text-sky-400" />
+                    <span>Seen {m.seenTime ? `• ${m.seenTime}` : ''}</span>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -153,9 +153,24 @@ export const WelcomeScreen = () => {
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
-            <span>{errorMsg}</span>
+          <div className="p-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+              <span>{errorMsg}</span>
+            </div>
+            {(errorMsg.includes('already registered') || errorMsg.includes('already exists')) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginIdentifier(email || username || loginIdentifier);
+                  setMode('login');
+                  setErrorMsg('');
+                }}
+                className="self-start text-[11px] text-blue-400 hover:text-blue-300 font-bold underline ml-6"
+              >
+                Log in with this account instead &rarr;
+              </button>
+            )}
           </div>
         )}
 
@@ -206,7 +221,7 @@ export const WelcomeScreen = () => {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Ashok Lingaraddi"
+                  placeholder="Ashok Lingaraddi"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
                 />
               </div>
@@ -214,7 +229,10 @@ export const WelcomeScreen = () => {
 
             {/* Email Address */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">Email Address</label>
+                <span className="text-[10px] text-blue-400 font-medium">1 account per Gmail</span>
+              </div>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -222,7 +240,7 @@ export const WelcomeScreen = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder="name@gmail.com"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
                 />
               </div>

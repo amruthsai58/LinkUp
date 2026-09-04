@@ -56,6 +56,21 @@ export const calculatePasswordStrength = (password) => {
   };
 };
 
+// Normalize email for strict Gmail comparison (e.g. ignoring dots and plus-tags for @gmail.com)
+export const normalizeEmail = (email) => {
+  if (!email || typeof email !== 'string') return '';
+  const clean = email.trim().toLowerCase();
+  const atIndex = clean.indexOf('@');
+  if (atIndex === -1) return clean;
+  const local = clean.slice(0, atIndex);
+  const domain = clean.slice(atIndex + 1);
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    const baseLocal = local.split('+')[0].replace(/\./g, '');
+    return `${baseLocal}@gmail.com`;
+  }
+  return `${local}@${domain}`;
+};
+
 export const AuthProvider = ({ children }) => {
   // Preserve and restore the logged-in user's saved account & session
   const [user, setUser] = useState(() => {
@@ -114,7 +129,7 @@ export const AuthProvider = ({ children }) => {
   const login = (identifier, password) => {
     const cleanIdentifier = (identifier || '').trim();
     if (!cleanIdentifier) {
-      throw new Error('Please enter your email or username');
+      throw new Error('Please enter your email, username, or LinkUp ID');
     }
     if (!password) {
       throw new Error('Please enter your password');
@@ -122,11 +137,13 @@ export const AuthProvider = ({ children }) => {
 
     // Check registered accounts in localStorage
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+    const normalizedIdentifier = normalizeEmail(cleanIdentifier);
     const foundUser = savedDb.find(
       (u) =>
         u.username?.toLowerCase() === cleanIdentifier.toLowerCase() ||
         u.email?.toLowerCase() === cleanIdentifier.toLowerCase() ||
-        u.linkupId?.toLowerCase() === cleanIdentifier.toLowerCase()
+        u.linkupId?.toLowerCase() === cleanIdentifier.toLowerCase() ||
+        (u.email && normalizeEmail(u.email) === normalizedIdentifier)
     );
 
     if (!foundUser) {
@@ -154,7 +171,8 @@ export const AuthProvider = ({ children }) => {
   // Sign Up: creates and safely stores new user in persistent registered database
   const signup = ({ name, username, email, password, dob, gender, avatar }) => {
     const cleanName = (name || '').trim();
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const rawEmail = (email || '').trim();
+    const cleanEmail = rawEmail.toLowerCase();
     const cleanUsername = (username || cleanName.toLowerCase().replace(/\s+/g, '.') || `user_${Date.now().toString().slice(-4)}`).trim().toLowerCase();
 
     if (!cleanName) {
@@ -163,20 +181,36 @@ export const AuthProvider = ({ children }) => {
     if (!cleanEmail) {
       throw new Error('Please enter your email address');
     }
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      throw new Error('Please enter a valid email address');
+    }
     if (!password || password.length < 6) {
       throw new Error('Password must be at least 6 characters');
     }
 
-    // Check if email or username already exists
+    // Check registered users database
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    const existing = savedDb.find(
-      (u) =>
-        u.email?.toLowerCase() === cleanEmail ||
-        u.username?.toLowerCase() === cleanUsername
-    );
+    const normalizedTarget = normalizeEmail(cleanEmail);
+    const isGmail = cleanEmail.endsWith('@gmail.com') || cleanEmail.endsWith('@googlemail.com');
 
-    if (existing) {
-      throw new Error('An account with this email or username already exists. Please log in.');
+    // 1. Strictly enforce: ONLY ONE ACCOUNT PER GMAIL ADDRESS
+    const existingWithEmail = savedDb.find((u) => u.email && normalizeEmail(u.email) === normalizedTarget);
+    if (existingWithEmail) {
+      if (isGmail) {
+        throw new Error(
+          `Only one LinkUp account is allowed per Gmail address. An account is already registered with this Gmail (${cleanEmail}). Please log in with your existing account.`
+        );
+      } else {
+        throw new Error(
+          `An account with this email address (${cleanEmail}) already exists. Please log in instead.`
+        );
+      }
+    }
+
+    // 2. Check if username is already taken
+    const existingWithUsername = savedDb.find((u) => u.username?.toLowerCase() === cleanUsername);
+    if (existingWithUsername) {
+      throw new Error(`The username "${cleanUsername}" is already taken. Please choose another username.`);
     }
 
     const uniqueId = generateLinkUpId(cleanUsername);
@@ -232,32 +266,39 @@ export const AuthProvider = ({ children }) => {
     return newUser;
   };
 
-  // Google OAuth Signup / Login
+  // Google OAuth Signup / Login: Strictly allows only one account per Gmail
   const loginWithGoogle = (customEmail = null, customName = null, customAvatar = null) => {
-    const email = (customEmail || '').trim().toLowerCase();
-    if (!email) {
+    const rawEmail = (customEmail || '').trim();
+    const email = rawEmail.toLowerCase();
+    if (!email || !email.includes('@')) {
       throw new Error('Please enter a valid Google email address');
     }
 
-    const name = customName || email.split('@')[0].replace(/[._]/g, ' ');
-    const username = email.split('@')[0].toLowerCase().replace(/\s+/g, '.');
-
+    const normalizedTarget = normalizeEmail(email);
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
-    let googleUser = savedDb.find((u) => u.email?.toLowerCase() === email);
+    let googleUser = savedDb.find((u) => u.email && normalizeEmail(u.email) === normalizedTarget);
 
     if (!googleUser) {
+      const name = customName || email.split('@')[0].replace(/[._]/g, ' ');
+      let baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9._]/g, '') || 'user';
+      let uniqueUsername = baseUsername;
+      let counter = 1;
+      while (savedDb.some((u) => u.username?.toLowerCase() === uniqueUsername.toLowerCase())) {
+        uniqueUsername = `${baseUsername}${counter++}`;
+      }
+
       googleUser = {
         id: `google-${Date.now()}`,
-        linkupId: generateLinkUpId(username),
+        linkupId: generateLinkUpId(uniqueUsername),
         name: name.charAt(0).toUpperCase() + name.slice(1),
-        username: username,
+        username: uniqueUsername,
         email: email,
         avatar: customAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
         coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
         bio: `Signed in via Google account (${email}) 🌟`,
         role: 'Verified Google User',
         subtitle: 'LinkUp Member',
-        website: `linkup.dev/${username}`,
+        website: `linkup.dev/${uniqueUsername}`,
         work: 'Verified Google Account',
         education: '',
         hometown: 'Bengaluru, India',

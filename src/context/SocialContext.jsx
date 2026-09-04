@@ -462,6 +462,102 @@ export const SocialProvider = ({ children }) => {
       }
     });
 
+    // 8. Subscribe to Real-Time Unsent Direct Messages
+    const unsubMessageUnsent = realtime.subscribe('UNSEND_DIRECT_MESSAGE', (payload) => {
+      if (!payload || !payload.messageId) return;
+
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (!c.messages.some((m) => m.id === payload.messageId)) return c;
+          const filtered = c.messages.filter((m) => m.id !== payload.messageId);
+          const last = filtered[filtered.length - 1];
+          return {
+            ...c,
+            lastMessage: last ? last.text : 'Message unsent',
+            time: last ? last.time : 'Just now',
+            messages: filtered,
+          };
+        })
+      );
+
+      setActiveConversation((prev) => {
+        if (!prev || !prev.messages.some((m) => m.id === payload.messageId)) return prev;
+        const filtered = prev.messages.filter((m) => m.id !== payload.messageId);
+        const last = filtered[filtered.length - 1];
+        return {
+          ...prev,
+          lastMessage: last ? last.text : 'Message unsent',
+          time: last ? last.time : 'Just now',
+          messages: filtered,
+        };
+      });
+    });
+
+    // 9. Subscribe to Real-Time Messages Seen
+    const unsubMessagesSeen = realtime.subscribe('MESSAGES_SEEN', (payload) => {
+      if (!payload || !user) return;
+      const isReaderMe =
+        (payload.readerId && payload.readerId === user.id) ||
+        (payload.readerUsername && user.username && payload.readerUsername.toLowerCase() === user.username.toLowerCase());
+
+      if (!isReaderMe) {
+        setConversations((prev) =>
+          prev.map((c) => {
+            const isMatch =
+              c.id === payload.conversationId ||
+              c.friend?.id === payload.readerId ||
+              (c.friend?.username && payload.readerUsername && c.friend.username.toLowerCase() === payload.readerUsername.toLowerCase());
+
+            if (!isMatch) return c;
+
+            const updatedMsgs = c.messages.map((m) => {
+              const isSentByMe = m.senderId === user.id || m.senderId === CURRENT_USER.id || m.senderId === 'user-01';
+              if (isSentByMe) {
+                return {
+                  ...m,
+                  seen: true,
+                  seenTime: payload.seenTime || 'Just now',
+                };
+              }
+              return m;
+            });
+
+            return {
+              ...c,
+              messages: updatedMsgs,
+            };
+          })
+        );
+
+        setActiveConversation((prev) => {
+          if (!prev) return prev;
+          const isMatch =
+            prev.id === payload.conversationId ||
+            prev.friend?.id === payload.readerId ||
+            (prev.friend?.username && payload.readerUsername && prev.friend.username.toLowerCase() === payload.readerUsername.toLowerCase());
+
+          if (!isMatch) return prev;
+
+          const updatedMsgs = prev.messages.map((m) => {
+            const isSentByMe = m.senderId === user.id || m.senderId === CURRENT_USER.id || m.senderId === 'user-01';
+            if (isSentByMe) {
+              return {
+                ...m,
+                seen: true,
+                seenTime: payload.seenTime || 'Just now',
+              };
+            }
+            return m;
+          });
+
+          return {
+            ...prev,
+            messages: updatedMsgs,
+          };
+        });
+      }
+    });
+
     return () => {
       unsubLiveStart();
       unsubLiveStop();
@@ -470,6 +566,8 @@ export const SocialProvider = ({ children }) => {
       unsubFriendReq();
       unsubReqAccepted();
       unsubUserDeleted();
+      unsubMessageUnsent();
+      unsubMessagesSeen();
     };
   }, [user, activeLiveStreamToWatch]);
 
@@ -894,6 +992,7 @@ export const SocialProvider = ({ children }) => {
       senderId: user?.id || CURRENT_USER.id,
       text,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      seen: false,
     };
 
     const conv = conversations.find((c) => c.id === conversationId);
@@ -931,6 +1030,96 @@ export const SocialProvider = ({ children }) => {
         senderLinkUpId: user?.linkupId,
         text: newMsg.text,
         time: newMsg.time,
+        seen: false,
+      });
+    }
+  };
+
+  // Unsend Direct Message for Everyone
+  const unsendMessage = (conversationId, messageId) => {
+    if (!messageId) return;
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== conversationId && !c.messages.some((m) => m.id === messageId)) return c;
+        const filtered = c.messages.filter((m) => m.id !== messageId);
+        const last = filtered[filtered.length - 1];
+        return {
+          ...c,
+          lastMessage: last ? last.text : 'Message unsent',
+          time: last ? last.time : 'Just now',
+          messages: filtered,
+        };
+      })
+    );
+
+    setActiveConversation((prev) => {
+      if (!prev) return prev;
+      if (prev.id !== conversationId && !prev.messages.some((m) => m.id === messageId)) return prev;
+      const filtered = prev.messages.filter((m) => m.id !== messageId);
+      const last = filtered[filtered.length - 1];
+      return {
+        ...prev,
+        lastMessage: last ? last.text : 'Message unsent',
+        time: last ? last.time : 'Just now',
+        messages: filtered,
+      };
+    });
+
+    // Real-time broadcast so recipient also removes it instantly
+    realtime.broadcast('UNSEND_DIRECT_MESSAGE', {
+      conversationId,
+      messageId,
+      senderId: user?.id || CURRENT_USER.id,
+      senderUsername: user?.username || CURRENT_USER.username,
+    });
+  };
+
+  // Mark Conversation Messages As Seen
+  const markConversationAsSeen = (conversationId) => {
+    if (!conversationId) return;
+
+    let hasUnread = false;
+    const currentUserId = user?.id || CURRENT_USER.id;
+    const currentUsername = (user?.username || CURRENT_USER.username || '').toLowerCase();
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== conversationId) return c;
+        const needsSeen = c.unread || c.messages.some((m) => m.senderId !== currentUserId && !m.seen);
+        if (!needsSeen) return c;
+        hasUnread = true;
+        const updatedMsgs = c.messages.map((m) =>
+          m.senderId !== currentUserId ? { ...m, seen: true, seenTime: nowTime } : m
+        );
+        return {
+          ...c,
+          unread: false,
+          messages: updatedMsgs,
+        };
+      })
+    );
+
+    setActiveConversation((prev) => {
+      if (!prev || prev.id !== conversationId) return prev;
+      const updatedMsgs = prev.messages.map((m) =>
+        m.senderId !== currentUserId ? { ...m, seen: true, seenTime: nowTime } : m
+      );
+      return {
+        ...prev,
+        unread: false,
+        messages: updatedMsgs,
+      };
+    });
+
+    if (hasUnread) {
+      realtime.broadcast('MESSAGES_SEEN', {
+        conversationId,
+        readerId: currentUserId,
+        readerUsername: currentUsername,
+        seenTime: nowTime,
+        seenAt: Date.now(),
       });
     }
   };
@@ -1027,6 +1216,8 @@ export const SocialProvider = ({ children }) => {
         toggleFollowFriend,
         handleFriendRequest,
         sendDirectMessage,
+        unsendMessage,
+        markConversationAsSeen,
         addNotification,
         markNotificationRead,
         toggleGroupJoin,

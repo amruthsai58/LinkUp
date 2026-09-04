@@ -9,7 +9,13 @@ import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const MessagesView = () => {
-  const { conversations, setActiveConversation, setActiveTab, friends } = useSocial();
+  const {
+    conversations,
+    setActiveConversation,
+    setActiveTab,
+    friends,
+    markConversationAsSeen,
+  } = useSocial();
   const { user: authUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -21,6 +27,7 @@ export const MessagesView = () => {
   );
 
   const handleOpenChat = (conv) => {
+    markConversationAsSeen(conv.id);
     setActiveConversation(conv);
     setActiveTab('chat_direct');
   };

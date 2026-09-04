@@ -151,9 +151,24 @@ export const AuthModal = () => {
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/40 flex items-center gap-2.5 text-red-300 text-xs font-semibold">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/40 flex flex-col gap-1.5 text-red-300 text-xs font-semibold">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+              <span>{errorMsg}</span>
+            </div>
+            {(errorMsg.includes('already registered') || errorMsg.includes('already exists')) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIdentifier(signupEmail || identifier);
+                  setAuthMode('login');
+                  setErrorMsg('');
+                }}
+                className="self-start text-[11px] text-purple-400 hover:text-purple-300 font-bold underline ml-6 flex items-center gap-1"
+              >
+                Log in to this account instead &rarr;
+              </button>
+            )}
           </div>
         )}
 
@@ -322,7 +337,10 @@ export const AuthModal = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Gmail / Email</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">Gmail / Email</label>
+                <span className="text-[10px] text-purple-400 font-medium">1 account per Gmail</span>
+              </div>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input

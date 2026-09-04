@@ -13,6 +13,7 @@ import {
   Wand2,
   Upload,
   Film,
+  Radio,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocial } from '../../context/SocialContext';
@@ -30,7 +31,7 @@ const FEELINGS_LIST = [
 
 export const CreatePostCard = () => {
   const { user } = useAuth();
-  const { createPostOpen, setCreatePostOpen, addPost } = useSocial();
+  const { createPostOpen, setCreatePostOpen, addPost, setIsLiveBroadcasterOpen } = useSocial();
   const { tracks } = useMusic();
 
   const fileInputRef = useRef(null);
@@ -394,6 +395,17 @@ export const CreatePostCard = () => {
           >
             <ImageIcon className="w-4 h-4" />
             <span>Photo</span>
+          </button>
+
+          {/* Direct Go Live Action */}
+          <button
+            type="button"
+            onClick={() => setIsLiveBroadcasterOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/15 hover:bg-red-600/25 text-red-400 hover:text-red-300 text-xs font-bold border border-red-500/30 transition-all hover:scale-105"
+            title="Start a Live Broadcast"
+          >
+            <Radio className="w-4 h-4 animate-pulse text-red-500" />
+            <span>Go Live</span>
           </button>
 
           {/* Upload Video from Local Media */}

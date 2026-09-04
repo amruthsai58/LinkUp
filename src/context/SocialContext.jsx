@@ -163,6 +163,7 @@ export const SocialProvider = ({ children }) => {
   });
   const [activeLiveStreamToWatch, setActiveLiveStreamToWatch] = useState(null);
   const [isLiveViewerOpen, setIsLiveViewerOpen] = useState(false);
+  const [isLiveBroadcasterOpen, setIsLiveBroadcasterOpen] = useState(false);
 
   // Modals state
   const [createPostOpen, setCreatePostOpen] = useState(false);
@@ -195,27 +196,32 @@ export const SocialProvider = ({ children }) => {
     // 1. Subscribe to Live Stream starts
     const unsubLiveStart = realtime.subscribe('LIVE_STREAM_STARTED', (streamPayload) => {
       if (streamPayload && streamPayload.broadcasterId) {
+        const enriched = {
+          ...streamPayload,
+          startTime: streamPayload.startTime || Date.now(),
+          lastHeartbeat: Date.now(),
+        };
         setActiveLiveStreams((prev) => {
           const filtered = prev.filter(
             (s) =>
-              s.broadcasterId !== streamPayload.broadcasterId &&
-              (s.broadcasterUsername && streamPayload.broadcasterUsername
-                ? s.broadcasterUsername.toLowerCase() !== streamPayload.broadcasterUsername.toLowerCase()
+              s.broadcasterId !== enriched.broadcasterId &&
+              (s.broadcasterUsername && enriched.broadcasterUsername
+                ? s.broadcasterUsername.toLowerCase() !== enriched.broadcasterUsername.toLowerCase()
                 : true)
           );
-          return [streamPayload, ...filtered];
+          return [enriched, ...filtered];
         });
 
         // If not broadcasting self, notify user that their friend is LIVE!
         const isSelf =
           user &&
-          ((streamPayload.broadcasterId && streamPayload.broadcasterId === user.id) ||
-            (streamPayload.broadcasterUsername &&
+          ((enriched.broadcasterId && enriched.broadcasterId === user.id) ||
+            (enriched.broadcasterUsername &&
               user.username &&
-              streamPayload.broadcasterUsername.toLowerCase() === user.username.toLowerCase()) ||
-            (streamPayload.linkupId &&
+              enriched.broadcasterUsername.toLowerCase() === user.username.toLowerCase()) ||
+            (enriched.linkupId &&
               user.linkupId &&
-              streamPayload.linkupId.toLowerCase() === user.linkupId.toLowerCase()));
+              enriched.linkupId.toLowerCase() === user.linkupId.toLowerCase()));
 
         if (!isSelf) {
           setNotifications((prev) => {
@@ -689,11 +695,17 @@ export const SocialProvider = ({ children }) => {
       try {
         // Sync active live streams
         const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
-        const freshLives = activeLives.filter((l) => Date.now() - (l.startTime || 0) < 3600000);
+        const freshLives = activeLives.filter((l) => {
+          if (!l || !l.broadcasterId) return false;
+          const t = l.lastHeartbeat || l.startTime || l.timestamp || 0;
+          return !t || Date.now() - t < 4 * 3600000;
+        });
         if (freshLives.length > 0) {
           setActiveLiveStreams((prev) => {
             const map = new Map();
-            [...freshLives, ...prev].forEach((s) => map.set(s.broadcasterId, s));
+            [...freshLives, ...prev].forEach((s) => {
+              if (s && s.broadcasterId) map.set(s.broadcasterId, s);
+            });
             return Array.from(map.values());
           });
         }
@@ -884,6 +896,42 @@ export const SocialProvider = ({ children }) => {
     setActiveLiveStreamToWatch(streamInfo);
     setIsLiveViewerOpen(true);
   };
+
+  // Auto-join live stream if opened with ?live= or ?watch= in URL
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const liveTarget = params.get('live') || params.get('watch');
+      if (liveTarget) {
+        const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
+        const match = activeLives.find(
+          (s) =>
+            (s.broadcasterId && s.broadcasterId.toLowerCase() === liveTarget.toLowerCase()) ||
+            (s.broadcasterUsername && s.broadcasterUsername.toLowerCase() === liveTarget.toLowerCase()) ||
+            (s.linkupId && s.linkupId.toLowerCase() === liveTarget.toLowerCase()) ||
+            (s.broadcasterPeerId && s.broadcasterPeerId.toLowerCase() === liveTarget.toLowerCase())
+        );
+
+        if (match) {
+          watchLive(match);
+        } else {
+          watchLive({
+            id: `stream-${liveTarget}`,
+            broadcasterId: liveTarget,
+            broadcasterName: 'Friend Live Broadcast',
+            broadcasterUsername: liveTarget,
+            linkupId: liveTarget.startsWith('lk-') ? liveTarget.toUpperCase() : liveTarget,
+            peerId: liveTarget,
+            broadcasterPeerId: liveTarget,
+            title: 'Live Video Broadcast',
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Auto live URL join error:', e);
+    }
+  }, []);
 
   // Add a new post
   const addPost = ({ content, media = [], musicTrackId = null, feeling = null, location = null, privacy = 'Public' }) => {
@@ -1309,6 +1357,8 @@ export const SocialProvider = ({ children }) => {
         setActiveLiveStreamToWatch,
         isLiveViewerOpen,
         setIsLiveViewerOpen,
+        isLiveBroadcasterOpen,
+        setIsLiveBroadcasterOpen,
         watchLive,
         openChatWithUser,
         createPostOpen,

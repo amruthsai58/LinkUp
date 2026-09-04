@@ -12,6 +12,10 @@ import {
   Send,
   Sparkles,
   Share2,
+  Check,
+  Minimize2,
+  Maximize2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
@@ -23,24 +27,30 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
 
   const [isLive, setIsLive] = useState(false);
   const [streamTitle, setStreamTitle] = useState('Chill Live Stream & Coding Session 💻⚡');
-  const [viewersCount, setViewersCount] = useState(1284);
+  const [viewersCount, setViewersCount] = useState(1);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [floatingHearts, setFloatingHearts] = useState([]);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
   const [chatMessages, setChatMessages] = useState([
-    { id: 1, user: 'Rahul Kumar', text: 'Hey bro! Nice live stream 🔥' },
-    { id: 2, user: 'Priya Sharma', text: 'Audio is super clear! 🎧' },
-    { id: 3, user: 'Kiran Gowda', text: 'Which project are we coding today?' },
-    { id: 4, user: 'Ananya Reddy', text: 'Greetings from Chennai! 🚀' },
+    { id: 1, user: 'System', text: 'Welcome to your live room! Friends can join anytime 🔴' },
   ]);
   const [inputMsg, setInputMsg] = useState('');
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
 
   // Request actual camera or simulated stream
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setIsMinimized(false);
+      setShowExitConfirm(false);
+      return;
+    }
 
     const startCamera = async () => {
       try {
@@ -68,9 +78,18 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
     };
   }, [isOpen]);
 
+  // Re-attach video stream when minimizing/expanding
+  useEffect(() => {
+    if (isOpen && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isOpen, isMinimized]);
+
   // Start / Stop broadcast and listen to real-time viewer interactions
   useEffect(() => {
     if (!isLive) return;
+
+    startTimeRef.current = Date.now();
 
     const streamInfo = {
       id: `stream-${Date.now()}`,
@@ -80,6 +99,8 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
       broadcasterAvatar: activeUser.avatar,
       title: streamTitle,
       linkupId: activeUser.linkupId,
+      startTime: startTimeRef.current,
+      lastHeartbeat: Date.now(),
     };
 
     let liveStreamMedia = streamRef.current;
@@ -92,8 +113,8 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
         if (ctx) {
           ctx.fillStyle = '#0a0d18';
           ctx.fillRect(0, 0, 640, 480);
-          ctx.fillStyle = '#a855f7';
-          ctx.font = 'bold 24px sans-serif';
+          ctx.fillStyle = '#ef4444';
+          ctx.font = 'bold 26px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText('🔴 LIVE ON LINKUP', 320, 200);
           ctx.fillStyle = '#ffffff';
@@ -108,20 +129,23 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
 
     realtime.startLiveBroadcast(liveStreamMedia, streamInfo);
 
-    // Heartbeat interval every 15s to keep stream active and broadcast to any freshly joined friends
+    // Heartbeat interval every 10s to keep stream active and broadcast to any freshly joined friends
     const heartbeatInterval = setInterval(() => {
       realtime.broadcast('LIVE_STREAM_STARTED', {
         ...streamInfo,
+        startTime: startTimeRef.current,
+        lastHeartbeat: Date.now(),
         peerId: realtime.peerId,
         broadcasterPeerId: realtime.peerId,
         isLive: true,
       });
-    }, 15000);
+    }, 10000);
 
     // Subscribe to incoming comments from real viewers
     const unsubComment = realtime.subscribe('LIVE_STREAM_COMMENT', (payload) => {
       if (payload && payload.comment) {
         setChatMessages((prev) => [...prev.slice(-25), payload.comment]);
+        setViewersCount((v) => Math.max(v, (payload.viewersCount || v) + 1));
       }
     });
 
@@ -142,7 +166,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
 
   const triggerHeartBurst = () => {
     const newHeart = {
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       left: Math.random() * 70 + 15,
     };
     setFloatingHearts((prev) => [...prev, newHeart]);
@@ -154,12 +178,104 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
   const handleSendChat = (e) => {
     e.preventDefault();
     if (!inputMsg.trim()) return;
-    setChatMessages((prev) => [
-      ...prev,
-      { id: Date.now(), user: activeUser.name, text: inputMsg },
-    ]);
+    const myComment = { id: Date.now(), user: activeUser.name, text: inputMsg };
+    setChatMessages((prev) => [...prev, myComment]);
+    realtime.broadcast('LIVE_STREAM_COMMENT', {
+      streamId: activeUser.id,
+      comment: myComment,
+    });
     setInputMsg('');
   };
+
+  const handleCopyLink = () => {
+    const liveParam = activeUser.linkupId || activeUser.username || activeUser.id;
+    const url = `${window.location.origin}${window.location.pathname}?live=${encodeURIComponent(liveParam)}`;
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch (e) {
+      console.warn('Copy live link error:', e);
+    }
+  };
+
+  const handleCloseAttempt = () => {
+    if (isLive) {
+      setShowExitConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmEndStream = () => {
+    setIsLive(false);
+    setShowExitConfirm(false);
+    setIsMinimized(false);
+    onClose();
+  };
+
+  // Minimized PiP Floating Bar
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-16 sm:bottom-6 right-4 z-50 animate-in slide-in-from-bottom duration-200">
+        <div className="p-3 bg-[#0A0D18]/95 backdrop-blur-xl border border-red-500/50 rounded-2xl shadow-2xl shadow-red-600/30 flex items-center gap-3">
+          <div className="relative flex-shrink-0">
+            <div className="w-10 h-10 rounded-full p-0.5 bg-gradient-to-tr from-red-600 to-amber-500 animate-pulse">
+              <img
+                src={activeUser.avatar}
+                alt={activeUser.name}
+                className="w-full h-full rounded-full object-cover border border-[#090C15]"
+              />
+            </div>
+            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 py-0.2 bg-red-600 rounded text-[7px] font-black text-white uppercase">
+              LIVE
+            </span>
+          </div>
+
+          <div className="min-w-0 pr-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-white truncate max-w-[140px]">
+                {streamTitle}
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-bold">
+                {viewersCount} watching
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400">Broadcasting in background</p>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsMinimized(false)}
+              className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1 transition-colors"
+              title="Expand Live Stream"
+            >
+              <Maximize2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Expand</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseAttempt}
+              className="p-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 transition-colors"
+              title="End Stream"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
@@ -182,20 +298,53 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
               <Users className="w-3.5 h-3.5 text-blue-400" />
               <span>{viewersCount.toLocaleString()}</span>
             </div>
+
+            {/* Share / Copy Live Stream Link */}
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 hover:bg-purple-900/60 backdrop-blur-md text-white text-xs font-bold border border-white/10 transition-colors"
+              title="Copy Direct Link to invite friends"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400 text-[11px]">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-[11px]">Share Link</span>
+                </>
+              )}
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-full bg-black/60 hover:bg-slate-800 text-white backdrop-blur-md transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {isLive && (
+              <button
+                type="button"
+                onClick={() => setIsMinimized(true)}
+                className="p-2 rounded-full bg-black/60 hover:bg-slate-800 text-slate-300 hover:text-white backdrop-blur-md transition-colors"
+                title="Minimize (keep live in background)"
+              >
+                <Minimize2 className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCloseAttempt}
+              className="p-2 rounded-full bg-black/60 hover:bg-slate-800 text-white backdrop-blur-md transition-colors"
+              title="Close Stream"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Video Stage Area */}
         <div className="relative flex-1 bg-slate-950 flex items-center justify-center overflow-hidden">
-          {/* Simulated HD Live Broadcast Video or Real User WebCam */}
           {isCameraOn ? (
             <video
               ref={videoRef}
@@ -230,16 +379,23 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
             {isLive ? (
               <div className="p-2.5 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-white">
                 <h4 className="text-xs font-bold leading-snug">{streamTitle}</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Host: {activeUser.name} (@{activeUser.username})</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Host: {activeUser.name} (@{activeUser.username}) • {activeUser.linkupId}
+                </p>
               </div>
             ) : (
-              <input
-                type="text"
-                value={streamTitle}
-                onChange={(e) => setStreamTitle(e.target.value)}
-                placeholder="Give your live stream a title..."
-                className="w-full px-3.5 py-2.5 bg-black/70 backdrop-blur-md border border-slate-700 rounded-2xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-red-500"
-              />
+              <div className="flex flex-col gap-1.5">
+                <input
+                  type="text"
+                  value={streamTitle}
+                  onChange={(e) => setStreamTitle(e.target.value)}
+                  placeholder="Give your live stream a title..."
+                  className="w-full px-3.5 py-2.5 bg-black/70 backdrop-blur-md border border-slate-700 rounded-2xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-red-500 shadow-xl"
+                />
+                <div className="p-2 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-300">
+                  💡 Tap <strong>"Go Live Now"</strong> below to begin broadcasting to all your friends!
+                </div>
+              </div>
             )}
           </div>
 
@@ -255,6 +411,50 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
               </div>
             ))}
           </div>
+
+          {/* Exit Confirmation Dialog */}
+          {showExitConfirm && (
+            <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+              <div className="w-full max-w-sm p-5 bg-[#0C101B] border border-slate-800 rounded-3xl shadow-2xl flex flex-col gap-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Live Broadcast in Progress</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Do you want to minimize and stay live while browsing, or end the stream completely?
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowExitConfirm(false);
+                      setIsMinimized(true);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Minimize2 className="w-4 h-4" />
+                    <span>Minimize & Stay Live</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmEndStream}
+                    className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg transition-colors"
+                  >
+                    End Live Broadcast
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowExitConfirm(false)}
+                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Broadcast Bar */}
@@ -328,16 +528,13 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
                 onClick={() => setIsLive(true)}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:opacity-95 text-white font-extrabold text-xs shadow-lg shadow-red-600/40 flex items-center justify-center gap-1.5 transition-transform active:scale-98"
               >
-                <Radio className="w-4 h-4" />
+                <Radio className="w-4 h-4 animate-pulse" />
                 <span>Go Live Now</span>
               </button>
             ) : (
               <button
                 type="button"
-                onClick={() => {
-                  setIsLive(false);
-                  onClose();
-                }}
+                onClick={handleCloseAttempt}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-red-400 font-bold text-xs border border-slate-700 transition-colors"
               >
                 End Live Stream

@@ -17,10 +17,9 @@ import { useMusic } from '../../context/MusicContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 import { fileToBase64 } from '../../utils/imageUtils';
 import { AiAssistantModal } from '../AI/AiAssistantModal';
-import { LiveStreamModal } from './LiveStreamModal';
 
 export const CreatePostModal = () => {
-  const { createPostOpen, setCreatePostOpen, addPost, friends } = useSocial();
+  const { createPostOpen, setCreatePostOpen, addPost, friends, setIsLiveBroadcasterOpen } = useSocial();
   const { user: authUser } = useAuth();
   const { tracks } = useMusic();
 
@@ -45,7 +44,6 @@ export const CreatePostModal = () => {
   // Sub-modal triggers
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
-  const [showLiveStreamModal, setShowLiveStreamModal] = useState(false);
   const [showTagFriendsModal, setShowTagFriendsModal] = useState(false);
   const [friendSearch, setFriendSearch] = useState('');
 
@@ -276,7 +274,10 @@ export const CreatePostModal = () => {
               {/* Live Video */}
               <button
                 type="button"
-                onClick={() => setShowLiveStreamModal(true)}
+                onClick={() => {
+                  setCreatePostOpen(false);
+                  setIsLiveBroadcasterOpen(true);
+                }}
                 className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-800/70 text-slate-200 text-xs font-semibold transition-colors text-left group"
               >
                 <div className="p-1.5 rounded-lg bg-red-500/10 text-red-500 group-hover:scale-110 transition-transform">
@@ -409,12 +410,6 @@ export const CreatePostModal = () => {
         onClose={() => setShowAiModal(false)}
         onApplyToPost={handleApplyAiPost}
         initialPrompt={content}
-      />
-
-      {/* Live Video Broadcast Stage Modal */}
-      <LiveStreamModal
-        isOpen={showLiveStreamModal}
-        onClose={() => setShowLiveStreamModal(false)}
       />
     </>
   );

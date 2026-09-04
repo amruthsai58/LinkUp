@@ -22,6 +22,7 @@ import { CreatePostModal } from './components/Feed/CreatePostModal';
 import { StoryViewerModal } from './components/Stories/StoryViewerModal';
 import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
 import { LiveViewerModal } from './components/Feed/LiveViewerModal';
+import { LiveStreamModal } from './components/Feed/LiveStreamModal';
 import { SettingsModal } from './components/Settings/SettingsModal';
 
 const MainAppContent = () => {
@@ -30,6 +31,8 @@ const MainAppContent = () => {
     isLiveViewerOpen,
     activeLiveStreamToWatch,
     setIsLiveViewerOpen,
+    isLiveBroadcasterOpen,
+    setIsLiveBroadcasterOpen,
   } = useSocial();
   const { user, isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
@@ -91,6 +94,10 @@ const MainAppContent = () => {
         isOpen={isLiveViewerOpen}
         liveStream={activeLiveStreamToWatch}
         onClose={() => setIsLiveViewerOpen(false)}
+      />
+      <LiveStreamModal
+        isOpen={isLiveBroadcasterOpen}
+        onClose={() => setIsLiveBroadcasterOpen(false)}
       />
     </div>
   );

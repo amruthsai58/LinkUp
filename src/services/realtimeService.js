@@ -127,9 +127,16 @@ class RealtimeService {
     if (type === 'LIVE_STREAM_STARTED' && payload && payload.broadcasterId) {
       try {
         const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
+        const existing = activeLives.find((l) => l.broadcasterId === payload.broadcasterId);
+        const enrichedPayload = {
+          ...payload,
+          startTime: payload.startTime || (existing && existing.startTime) || Date.now(),
+          lastHeartbeat: Date.now(),
+        };
         const filtered = activeLives.filter((l) => l.broadcasterId !== payload.broadcasterId);
-        filtered.unshift(payload);
+        filtered.unshift(enrichedPayload);
         localStorage.setItem('linkup_active_live_streams', JSON.stringify(filtered));
+        payload = enrichedPayload;
       } catch {}
     }
 
@@ -519,12 +526,14 @@ class RealtimeService {
       this.peerId ||
       formatPeerId(streamInfo.linkupId || streamInfo.broadcasterUsername || streamInfo.broadcasterId);
 
+    const now = Date.now();
     const broadcastPayload = {
       ...streamInfo,
       peerId: resolvedPeerId,
       broadcasterPeerId: resolvedPeerId,
       broadcasterUsername: streamInfo.broadcasterUsername,
-      startTime: Date.now(),
+      startTime: streamInfo.startTime || now,
+      lastHeartbeat: now,
       isLive: true,
     };
 

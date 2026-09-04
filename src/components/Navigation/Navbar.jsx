@@ -28,16 +28,19 @@ export const Navbar = () => {
           <Logo size="md" showTagline={false} />
         </div>
 
-        {/* Center: Find by LinkUp ID Quick Button */}
+        {/* Center: Search Bar trigger */}
         <button
           type="button"
           onClick={() => setIsSearchActive(true)}
-          className="px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-purple-950/40 border border-slate-700/80 hover:border-purple-500/50 text-slate-300 hover:text-purple-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm group"
+          className="flex-1 max-w-[170px] xs:max-w-[220px] sm:max-w-[260px] mx-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-purple-950/40 border border-slate-700/80 hover:border-purple-500/50 text-slate-400 hover:text-slate-200 text-xs font-medium flex items-center justify-between gap-1.5 transition-all shadow-inner group cursor-pointer"
           title="Open Search Bar (Enter LinkUp ID, Name, Song)"
         >
-          <Search className="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform" />
-          <span className="hidden sm:inline">Enter LinkUp ID (LK-...)</span>
-          <span className="sm:hidden">Find ID</span>
+          <div className="flex items-center gap-2 min-w-0 truncate">
+            <Search className="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0" />
+            <span className="truncate hidden xs:inline text-[11px] sm:text-xs">Search ID / people...</span>
+            <span className="truncate xs:hidden text-[11px]">Search...</span>
+          </div>
+          <kbd className="hidden sm:inline-flex items-center text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono border border-slate-700/80">⌘K</kbd>
         </button>
 
         {/* Right: Heart (Notifications) + Message (Direct Chat) */}

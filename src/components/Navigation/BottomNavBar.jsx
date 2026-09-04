@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const BottomNavBar = () => {
-  const { activeTab, setActiveTab, setCreatePostOpen, setViewingUser } = useSocial();
+  const { activeTab, setActiveTab, setCreatePostOpen, setViewingUser, setIsSearchActive } = useSocial();
   const { user: authUser } = useAuth();
 
   const user = authUser || CURRENT_USER;
@@ -33,7 +33,10 @@ export const BottomNavBar = () => {
       {/* Search Button */}
       <button
         type="button"
-        onClick={() => setActiveTab('search')}
+        onClick={() => {
+          setActiveTab('search');
+          setIsSearchActive(true);
+        }}
         className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all ${
           activeTab === 'search' ? 'text-white scale-110' : 'text-slate-500 hover:text-slate-300'
         }`}

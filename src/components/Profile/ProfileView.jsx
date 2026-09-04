@@ -43,6 +43,7 @@ export const ProfileView = () => {
     openChatWithUser,
     activeLiveStreams,
     watchLive,
+    setIsSearchActive,
   } = useSocial();
   const { user: authUser, updateUserProfile } = useAuth();
   const [activeTabSub, setActiveTabSub] = useState('grid'); // 'grid' | 'reels' | 'tagged'
@@ -657,7 +658,10 @@ export const ProfileView = () => {
             {isMyProfile && (
               <button
                 type="button"
-                onClick={() => setActiveTab('search')}
+                onClick={() => {
+                  setActiveTab('search');
+                  setIsSearchActive(true);
+                }}
                 className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-purple-600/30"
                 title="Enter friend's ID to follow"
               >
@@ -681,7 +685,10 @@ export const ProfileView = () => {
 
             <button
               type="button"
-              onClick={() => setActiveTab('search')}
+              onClick={() => {
+                setActiveTab('search');
+                setIsSearchActive(true);
+              }}
               className="py-2 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
             >
               <span>Add Friends</span>

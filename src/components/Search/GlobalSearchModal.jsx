@@ -51,16 +51,24 @@ export const GlobalSearchModal = () => {
     }
   }, [isSearchActive]);
 
-  // Handle Escape key to close
+  // Handle global keyboard shortcuts: Ctrl+K / Cmd+K / Slash to open, Escape to close
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchActive((prev) => !prev);
+        return;
+      }
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        setIsSearchActive(true);
+        return;
+      }
+      if (e.key === 'Escape' && isSearchActive) {
         setIsSearchActive(false);
       }
     };
-    if (isSearchActive) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSearchActive, setIsSearchActive]);
 
@@ -163,18 +171,19 @@ export const GlobalSearchModal = () => {
   return (
     <div
       onClick={() => setIsSearchActive(false)}
-      className="fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-16 px-3 sm:px-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 sm:pt-16 px-3 sm:px-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl max-h-[85dvh] bg-[#0A0D18] border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-100"
+        className="relative w-full max-w-2xl max-h-[85dvh] bg-[#0A0D18] border border-purple-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-100 ring-1 ring-purple-500/20"
       >
         {/* Search Header Bar with Auto-Focused Input */}
-        <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-900/60">
+        <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-900/80">
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <Search className="w-5 h-5 text-purple-400 flex-shrink-0" />
+            <Search className="w-5 h-5 text-purple-400 flex-shrink-0 animate-pulse" />
             <input
               ref={inputRef}
+              autoFocus
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

@@ -313,19 +313,6 @@ export const INITIAL_POSTS = [
 
 export const INITIAL_STORIES = [
   {
-    id: 'story-01',
-    user: {
-      id: 'user-01',
-      name: 'Your Story',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-    },
-    mediaUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80',
-    caption: 'Late night coding session 💻⚡',
-    musicTrackId: 'kan-01',
-    timestamp: 'Just now',
-    viewersCount: 48,
-  },
-  {
     id: 'story-02',
     user: {
       id: 'user-02',

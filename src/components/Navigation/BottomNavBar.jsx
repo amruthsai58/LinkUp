@@ -35,7 +35,7 @@ export const BottomNavBar = () => {
         type="button"
         onClick={() => {
           setActiveTab('search');
-          setIsSearchActive(true);
+          setIsSearchActive(false);
         }}
         className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all ${
           activeTab === 'search' ? 'text-white scale-110' : 'text-slate-500 hover:text-slate-300'

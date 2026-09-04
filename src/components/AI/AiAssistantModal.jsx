@@ -33,11 +33,12 @@ export const AiAssistantModal = ({ isOpen, onClose, onApplyToPost, onApplyToStor
   if (!isOpen) return null;
 
   const quickPresets = [
-    { label: '🌧️ Bangalore Rain & Coffee', prompt: 'Rainy afternoon in Bangalore with hot filter coffee and soulful Kannada melodies', tone: 'vibe', lang: 'kannada_mix' },
-    { label: '🔥 Devara / Hukum Mass Hype', prompt: 'Full mass blockbuster song energy, pumped up with rockstar beats', tone: 'hype', lang: 'tamil_mix' },
-    { label: '🌊 Beach Trip & Sunset', prompt: 'Coastal road trip to Gokarna & Malpe with friends under the golden sunset', tone: 'aesthetic', lang: 'english' },
-    { label: '⚡ Late Night Coding', prompt: 'Late night coding session, building cool full-stack social features', tone: 'tech', lang: 'english' },
-    { label: '🎉 Friday Weekend Vibes', prompt: 'Excited for the weekend party with friends and energetic Telugu tracks', tone: 'casual', lang: 'telugu_mix' },
+    { label: '🌧️ ಬೆಂಗಳೂರು ಮಳೆ & ಕಾಫಿ', prompt: 'ಬೆಂಗಳೂರಿನ ತಂಪಾದ ಮಳೆ, ಬಿಸಿ ಫಿಲ್ಟರ್ ಕಾಫಿ ಮತ್ತು ಅದ್ಭುತ ಹಾಡುಗಳು', tone: 'aesthetic', lang: 'kannada' },
+    { label: '🔥 దేవర / పుష్ప మాస్ ఎనర్జీ', prompt: 'ఫుల్ మాస్ బ్లాక్‌బస్టర్ సాంగ్ ఎనర్జీ, థియేటర్ వైబ్స్', tone: 'hype', lang: 'telugu' },
+    { label: '💥 வெறித்தனம் ஹுக்கும் மாஸ்', prompt: 'அனிருத் ராக்ஸ்டார் பீட்ஸ், மாஸ் எனர்ஜி மற்றும் ஸ்வாக்', tone: 'hype', lang: 'tamil' },
+    { label: '☕ सुहानी शाम और चाय', prompt: 'खूबसूरत शाम, गरम चाय और दिल को छू लेने वाले गाने', tone: 'aesthetic', lang: 'hindi' },
+    { label: '🌴 മഴയും കാപ്പിയും മൂഡ്', prompt: 'മഴക്കാല നിമിഷങ്ങൾ, കാപ്പിയും നല്ലൊരു മെലഡിയും', tone: 'vibe', lang: 'malayalam' },
+    { label: '🌊 Coastal Sunset Road Trip', prompt: 'Sunset coastal road trip to Gokarna with favorite regional melodies', tone: 'vibe', lang: 'english' },
   ];
 
   const handleGenerate = async (customPrompt, customTone, customLang) => {

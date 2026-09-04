@@ -231,35 +231,36 @@ export const ExploreView = () => {
     return list;
   }, [matchedCloud, matchedFriends, authUser, followedUsers]);
 
-  // Filter Posts
-  const filteredPosts = posts.filter((p) => {
+  // Filter Posts safely
+  const filteredPosts = (posts || []).filter((p) => {
+    if (!p) return false;
+    const content = (p.content || '').toLowerCase();
+    const authorName = (p.author?.name || '').toLowerCase();
+    const location = (p.location || '').toLowerCase();
+
     if (selectedTag) {
-      const tagKw = selectedTag.keyword || selectedTag.tag.replace(/^#/, '').toLowerCase();
-      return (
-        p.content.toLowerCase().includes(tagKw) ||
-        (p.location && p.location.toLowerCase().includes(tagKw))
-      );
+      const tagKw = (selectedTag.keyword || selectedTag.tag.replace(/^#/, '')).toLowerCase();
+      return content.includes(tagKw) || location.includes(tagKw);
     }
     if (!cleanQuery) return true;
-    return (
-      p.content.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-      p.author.name.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-      (p.location && p.location.toLowerCase().includes(cleanQuery.toLowerCase()))
-    );
+    const qLower = cleanQuery.toLowerCase();
+    return content.includes(qLower) || authorName.includes(qLower) || location.includes(qLower);
   });
 
-  // Filter Reels
-  const filteredReels = reels.filter((r) => {
+  // Filter Reels safely
+  const filteredReels = (reels || []).filter((r) => {
+    if (!r) return false;
+    const caption = (r.caption || '').toLowerCase();
+    const creatorName = (r.creator?.name || '').toLowerCase();
+    const creatorUsername = (r.creator?.username || '').toLowerCase();
+
     if (selectedTag) {
-      const tagKw = selectedTag.keyword || selectedTag.tag.replace(/^#/, '').toLowerCase();
-      return r.caption.toLowerCase().includes(tagKw);
+      const tagKw = (selectedTag.keyword || selectedTag.tag.replace(/^#/, '')).toLowerCase();
+      return caption.includes(tagKw);
     }
     if (!cleanQuery) return true;
-    return (
-      r.caption.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-      r.creator.name.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-      r.creator.username.toLowerCase().includes(cleanQuery.toLowerCase())
-    );
+    const qLower = cleanQuery.toLowerCase();
+    return caption.includes(qLower) || creatorName.includes(qLower) || creatorUsername.includes(qLower);
   });
 
   const filteredTags = TRENDING_TAGS.filter(

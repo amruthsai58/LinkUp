@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { Radio } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
+import { useAuth } from '../../context/AuthContext';
 import { useMusic } from '../../context/MusicContext';
 import { StoriesBar } from '../Stories/StoriesBar';
 import { PostCard } from './PostCard';
@@ -15,11 +16,12 @@ export const Feed = () => {
     activeLiveStreams,
     watchLive,
   } = useSocial();
+  const { user: authUser } = useAuth();
   const { tracks, playTrack, stopAudio, isPlaying, currentTrack } = useMusic();
 
   const userHasScrolledRef = useRef(false);
 
-  // Deduplicate and sort posts
+  // Deduplicate and sort posts: Always ensure user's own posts are prominently visible at top
   const sortedPosts = useMemo(() => {
     const map = new Map();
     (posts || []).forEach((p) => {
@@ -27,19 +29,46 @@ export const Feed = () => {
         map.set(p.id, p);
       }
     });
+
+    const isOwnPost = (p) => {
+      if (!p?.author) return false;
+      if (authUser?.id && p.author.id === authUser.id) return true;
+      if (authUser?.username && p.author.username?.toLowerCase() === authUser.username.toLowerCase()) return true;
+      return false;
+    };
+
     return Array.from(map.values()).sort((a, b) => {
+      const aMine = isOwnPost(a);
+      const bMine = isOwnPost(b);
+
+      // User's own posts are always pinned to top, newest first
+      if (aMine && !bMine) return -1;
+      if (!aMine && bMine) return 1;
+      if (aMine && bMine) {
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      }
+
       if (feedMode === 'chronological') {
         return (b.createdAt || 0) - (a.createdAt || 0);
       }
+
+      // Algorithmic mode with strong recency bonus for newly published posts
+      const ageHoursA = (Date.now() - (a.createdAt || 0)) / (1000 * 60 * 60);
+      const ageHoursB = (Date.now() - (b.createdAt || 0)) / (1000 * 60 * 60);
+      const recencyA = ageHoursA < 2 ? 100 : ageHoursA < 24 ? 30 : 0;
+      const recencyB = ageHoursB < 2 ? 100 : ageHoursB < 24 ? 30 : 0;
+
       const scoreA =
         Object.values(a.reactions || {}).reduce((x, y) => x + y, 0) +
-        (a.comments?.length || 0) * 2;
+        (a.comments?.length || 0) * 2 +
+        recencyA;
       const scoreB =
         Object.values(b.reactions || {}).reduce((x, y) => x + y, 0) +
-        (b.comments?.length || 0) * 2;
+        (b.comments?.length || 0) * 2 +
+        recencyB;
       return scoreB - scoreA;
     });
-  }, [posts, feedMode]);
+  }, [posts, feedMode, authUser]);
 
   // Only auto-play when user actively scrolls into a post (never upon initial home page load)
   useEffect(() => {

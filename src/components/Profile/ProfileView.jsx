@@ -18,12 +18,13 @@ import {
   Check,
   Radio,
   MessageCircle,
-  Users,
+  FileText,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER, INITIAL_FRIENDS } from '../../data/mockSocialData';
 import { realtime } from '../../services/realtimeService';
+import { PostCard } from '../Feed/PostCard';
 import { EditProfileModal } from './EditProfileModal';
 import { HighlightViewerModal } from './HighlightViewerModal';
 import { CreateHighlightModal } from './CreateHighlightModal';
@@ -44,9 +45,10 @@ export const ProfileView = () => {
     activeLiveStreams,
     watchLive,
     setIsSearchActive,
+    setCreatePostOpen,
   } = useSocial();
   const { user: authUser, updateUserProfile } = useAuth();
-  const [activeTabSub, setActiveTabSub] = useState('grid'); // 'grid' | 'reels' | 'tagged'
+  const [activeTabSub, setActiveTabSub] = useState('posts'); // 'posts' | 'grid' | 'reels' | 'tagged'
 
   // Modals state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -415,9 +417,19 @@ export const ProfileView = () => {
     ? myFollowersCount
     : friendFollowersCount;
 
-  // 5. Dynamic Gallery Images
-  const postImages = (isMyProfile ? myPosts : friendPosts)
-    .map((p) => p.image)
+  // 5. Dynamic Gallery Images & Target Posts
+  const targetUserPosts = isMyProfile ? myPosts : friendPosts;
+  const postImages = targetUserPosts
+    .flatMap((p) => {
+      const urls = [];
+      if (p.image) urls.push(p.image);
+      if (Array.isArray(p.media)) {
+        p.media.forEach((m) => {
+          if (m?.url && (!m.type || m.type === 'image')) urls.push(m.url);
+        });
+      }
+      return urls;
+    })
     .filter(Boolean);
   const displayedGalleryImages = postImages.length > 0
     ? [...postImages, ...(user.gallery || CURRENT_USER.gallery || [])]
@@ -813,55 +825,99 @@ export const ProfileView = () => {
           </div>
         </div>
 
-        {/* Gallery Tabs Bar */}
+        {/* Profile Content Tabs Bar */}
         <div className="flex items-center justify-around border-t border-slate-800/80 pt-1">
           <button
             type="button"
+            onClick={() => setActiveTabSub('posts')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition-all ${
+              activeTabSub === 'posts' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'
+            }`}
+            title="Posts Feed"
+          >
+            <FileText className="w-4 h-4" />
+            <span className="text-xs font-bold">Posts ({targetUserPosts.length})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTabSub('grid')}
-            className={`flex-1 py-2.5 flex items-center justify-center transition-all ${
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition-all ${
               activeTabSub === 'grid' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'
             }`}
+            title="Photo Grid"
           >
-            <Grid className="w-5 h-5" />
+            <Grid className="w-4 h-4" />
+            <span className="text-xs font-bold">Grid</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTabSub('reels')}
-            className={`flex-1 py-2.5 flex items-center justify-center transition-all ${
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition-all ${
               activeTabSub === 'reels' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'
             }`}
+            title="Reels"
           >
-            <Film className="w-5 h-5" />
+            <Film className="w-4 h-4" />
+            <span className="text-xs font-bold">Reels</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTabSub('tagged')}
-            className={`flex-1 py-2.5 flex items-center justify-center transition-all ${
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition-all ${
               activeTabSub === 'tagged' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'
             }`}
+            title="Tagged"
           >
-            <Tag className="w-5 h-5" />
+            <Tag className="w-4 h-4" />
+            <span className="text-xs font-bold">Tagged</span>
           </button>
         </div>
 
-        {/* 3-Column Photo Grid */}
-        <div className="grid grid-cols-3 gap-1 px-0.5">
-          {displayedGalleryImages.map((imgUrl, idx) => (
-            <div
-              key={idx}
-              className="relative aspect-square bg-slate-800 overflow-hidden cursor-pointer group"
-            >
-              <img
-                src={imgUrl}
-                alt="post grid"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-purple-900/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          ))}
-        </div>
+        {/* Tab 1: Posts Feed View */}
+        {activeTabSub === 'posts' && (
+          <div className="flex flex-col gap-3 px-1 pt-2">
+            {targetUserPosts.length > 0 ? (
+              targetUserPosts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs bg-slate-900/40 rounded-2xl border border-slate-800/60 flex flex-col items-center gap-2.5">
+                <p className="font-semibold text-slate-300">No posts shared yet.</p>
+                {isMyProfile && (
+                  <button
+                    type="button"
+                    onClick={() => setCreatePostOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-purple-600/30 transition-all active:scale-95"
+                  >
+                    Create Your First Post
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: 3-Column Photo Grid */}
+        {activeTabSub === 'grid' && (
+          <div className="grid grid-cols-3 gap-1 px-0.5 pt-2">
+            {displayedGalleryImages.map((imgUrl, idx) => (
+              <div
+                key={idx}
+                className="relative aspect-square bg-slate-800 overflow-hidden cursor-pointer group rounded-lg"
+              >
+                <img
+                  src={imgUrl}
+                  alt="post grid"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-purple-900/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Edit Profile Modal Dialog */}

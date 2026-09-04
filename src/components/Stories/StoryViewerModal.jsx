@@ -47,9 +47,9 @@ export const StoryViewerModal = () => {
   // Strict ownership verification: Only owner can delete or edit privacy of their story
   const isOwnStory = Boolean(
     user && currentStory && (
+      currentStory.isMyStory ||
       currentStory.user?.id === user.id ||
       currentStory.user?.isOwner ||
-      currentStory.user?.name === 'Your Story' ||
       currentStory.user?.name?.includes('(You)') ||
       (currentStory.user?.username && currentStory.user?.username === user.username)
     )

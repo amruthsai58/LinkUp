@@ -78,9 +78,29 @@ export const SocialProvider = ({ children }) => {
       localStorage.setItem('linkup_posts', JSON.stringify(posts));
     } catch {}
   }, [posts]);
-  const [friends, setFriends] = useState(INITIAL_FRIENDS);
-  const [stories, setStories] = useState(INITIAL_STORIES);
-  const [reels, setReels] = useState(INITIAL_REELS);
+  const [stories, setStories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('linkup_stories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (s) => s && s.id !== 'story-01' && s.user?.name !== 'Your Story'
+          );
+        }
+      }
+    } catch {}
+    return INITIAL_STORIES.filter(
+      (s) => s && s.id !== 'story-01' && s.user?.name !== 'Your Story'
+    );
+  });
+
+  // Persist stories to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('linkup_stories', JSON.stringify(stories));
+    } catch {}
+  }, [stories]);
   const [groups, setGroups] = useState(INITIAL_GROUPS);
   const [pages, setPages] = useState(INITIAL_PAGES);
   const [marketplaceItems, setMarketplaceItems] = useState(INITIAL_MARKETPLACE_ITEMS);
@@ -1042,18 +1062,20 @@ export const SocialProvider = ({ children }) => {
     const newStory = {
       id: `story-${Date.now()}`,
       user: {
-        id: user?.id || 'current-user',
-        name: user?.name ? `${user.name} (You)` : 'Your Story',
-        avatar: user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80',
+        id: user?.id || CURRENT_USER.id,
+        name: user?.name ? `${user.name} (You)` : 'You',
+        username: user?.username || CURRENT_USER.username,
+        avatar: user?.avatar || CURRENT_USER.avatar,
         isOwner: true,
       },
+      isMyStory: true,
       mediaUrl,
       caption,
       musicTrackId,
       privacy,
       hiddenFromUserIds,
       timestamp: 'Just now',
-      viewersCount: 1,
+      viewersCount: 0,
     };
 
     setStories((prev) => [newStory, ...prev]);

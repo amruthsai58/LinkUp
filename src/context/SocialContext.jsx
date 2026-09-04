@@ -78,6 +78,8 @@ export const SocialProvider = ({ children }) => {
       localStorage.setItem('linkup_posts', JSON.stringify(posts));
     } catch {}
   }, [posts]);
+  const [friends, setFriends] = useState(INITIAL_FRIENDS);
+  const [reels, setReels] = useState(INITIAL_REELS);
   const [stories, setStories] = useState(() => {
     try {
       const saved = localStorage.getItem('linkup_stories');

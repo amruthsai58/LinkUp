@@ -5,6 +5,7 @@ import path from 'path';
 console.log('🚀 Starting rock-solid GitHub Pages deployment...');
 
 const distDir = path.resolve('dist');
+const deployDir = path.resolve('.deploy_gh_pages');
 
 if (!fs.existsSync(distDir)) {
   console.error('❌ dist directory does not exist. Run build first.');
@@ -15,34 +16,52 @@ if (!fs.existsSync(distDir)) {
 fs.copyFileSync(path.join(distDir, 'index.html'), path.join(distDir, '404.html'));
 fs.writeFileSync(path.join(distDir, '.nojekyll'), '');
 
-// 2. Read remote origin URL from current repository
-const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
-console.log('📍 Remote URL:', remoteUrl);
-
-// 3. Temporarily initialize git inside dist and push to gh-pages
 try {
-  // Remove any previous git repo in dist
-  const gitInDist = path.join(distDir, '.git');
-  if (fs.existsSync(gitInDist)) {
-    fs.rmSync(gitInDist, { recursive: true, force: true });
+  // Clean up any stale worktree
+  try {
+    execSync('git worktree remove --force .deploy_gh_pages', { stdio: 'ignore' });
+  } catch {}
+  if (fs.existsSync(deployDir)) {
+    fs.rmSync(deployDir, { recursive: true, force: true });
   }
 
-  execSync('git init', { cwd: distDir, stdio: 'inherit' });
-  execSync('git checkout -b gh-pages', { cwd: distDir, stdio: 'inherit' });
-  execSync('git add -A', { cwd: distDir, stdio: 'inherit' });
-  execSync('git commit -m "Deploy to GitHub Pages [skip ci]"', { cwd: distDir, stdio: 'inherit' });
-  execSync(`git push "${remoteUrl}" gh-pages --force`, { cwd: distDir, stdio: 'inherit' });
-
-  // Clean up .git from dist
-  fs.rmSync(gitInDist, { recursive: true, force: true });
-
-  // Ensure root workspace stays on main
+  // Fetch gh-pages branch
   try {
-    execSync('git checkout main', { stdio: 'ignore' });
+    execSync('git fetch origin gh-pages:gh-pages', { stdio: 'inherit' });
   } catch {}
+
+  // Add worktree for gh-pages
+  execSync('git worktree add .deploy_gh_pages gh-pages', { stdio: 'inherit' });
+
+  // Delete all existing files in worktree except .git
+  const files = fs.readdirSync(deployDir);
+  for (const file of files) {
+    if (file !== '.git') {
+      fs.rmSync(path.join(deployDir, file), { recursive: true, force: true });
+    }
+  }
+
+  // Copy dist contents into worktree
+  fs.cpSync(distDir, deployDir, { recursive: true });
+
+  // Commit and push
+  execSync('git add -A', { cwd: deployDir, stdio: 'inherit' });
+  try {
+    execSync('git commit -m "Deploy latest build to GitHub Pages [skip ci]"', { cwd: deployDir, stdio: 'inherit' });
+  } catch {
+    console.log('ℹ️ No changes to commit');
+  }
+
+  execSync('git push origin gh-pages --force', { cwd: deployDir, stdio: 'inherit' });
+
+  // Remove worktree
+  execSync('git worktree remove --force .deploy_gh_pages', { stdio: 'inherit' });
 
   console.log('✅ Successfully published to GitHub Pages!');
 } catch (err) {
   console.error('❌ Deployment failed:', err.message);
+  try {
+    execSync('git worktree remove --force .deploy_gh_pages', { stdio: 'ignore' });
+  } catch {}
   process.exit(1);
 }

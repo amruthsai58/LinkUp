@@ -516,12 +516,24 @@ export const ProfileView = () => {
             onClick={() => {
               if (isMyProfile) {
                 setIsEditModalOpen(true);
+              } else if (isUserLive && liveStreamObj) {
+                watchLive(liveStreamObj);
               }
             }}
-            className={`relative w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-xl flex-shrink-0 transition-transform ${
-              isMyProfile ? 'cursor-pointer hover:scale-105' : ''
+            className={`relative w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 ${
+              isUserLive
+                ? 'bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 shadow-2xl shadow-red-600/50 cursor-pointer hover:scale-105 animate-pulse'
+                : 'bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-xl'
+            } flex-shrink-0 transition-transform ${
+              isMyProfile || isUserLive ? 'cursor-pointer hover:scale-105' : ''
             }`}
-            title={isMyProfile ? "Click to edit profile picture" : user.name}
+            title={
+              isMyProfile
+                ? 'Click to edit profile picture'
+                : isUserLive
+                ? `Watch ${user.name} Live Broadcast`
+                : user.name
+            }
           >
             <img
               src={user.avatar || CURRENT_USER.avatar}

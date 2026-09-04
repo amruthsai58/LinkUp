@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Heart, MessageCircle, UserPlus, Check, X } from 'lucide-react';
+import { Heart, MessageCircle, UserPlus, Check, X, Radio } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 
 export const NotificationsView = () => {
-  const { notifications, handleFriendRequest, viewUserProfile } = useSocial();
+  const { notifications, handleFriendRequest, viewUserProfile, watchLive } = useSocial();
   const [activeFilter, setActiveFilter] = useState('All'); // 'All' | 'Unread' | 'Mentions' | 'Friends'
 
   const FILTERS = ['All', 'Unread', 'Mentions', 'Friends'];
@@ -95,6 +95,20 @@ export const NotificationsView = () => {
                         </button>
                       </div>
                     )}
+
+                    {/* Action button for Live Stream */}
+                    {(n.type === 'live' || n.liveStream) && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => watchLive(n.liveStream)}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-black shadow-lg shadow-red-600/30 flex items-center gap-1.5 animate-pulse transition-all active:scale-95"
+                        >
+                          <Radio className="w-3.5 h-3.5" />
+                          <span>Watch Live</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -136,6 +150,20 @@ export const NotificationsView = () => {
                       <span>{n.action}</span>
                     </p>
                     <span className="text-[10px] text-slate-500 mt-0.5 block">{n.time}</span>
+
+                    {/* Action button for Live Stream */}
+                    {(n.type === 'live' || n.liveStream) && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => watchLive(n.liveStream)}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-black shadow-lg shadow-red-600/30 flex items-center gap-1.5 animate-pulse transition-all active:scale-95"
+                        >
+                          <Radio className="w-3.5 h-3.5" />
+                          <span>Watch Live</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

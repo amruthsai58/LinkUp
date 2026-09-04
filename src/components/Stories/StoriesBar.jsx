@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const StoriesBar = () => {
-  const { stories, setCreateStoryOpen, setActiveStoryIndex } = useSocial();
+  const { stories, setCreateStoryOpen, setActiveStoryIndex, activeLiveStreams, watchLive } = useSocial();
   const { user: authUser } = useAuth();
 
   const user = authUser || CURRENT_USER;
@@ -31,6 +31,38 @@ export const StoriesBar = () => {
         </div>
         <span className="text-[11px] font-medium text-slate-300">Your Story</span>
       </div>
+
+      {/* Active Live Broadcasts with Pulsing Red Rings */}
+      {activeLiveStreams &&
+        activeLiveStreams.map((stream) => (
+          <div
+            key={stream.id || stream.broadcasterId}
+            onClick={() => watchLive(stream)}
+            className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group animate-in fade-in"
+            title={`Watch ${stream.broadcasterName} Live`}
+          >
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 shadow-lg shadow-red-600/40 group-hover:scale-105 transition-transform animate-pulse">
+                <div className="w-full h-full rounded-full p-[2px] bg-[#090C15]">
+                  <img
+                    src={
+                      stream.broadcasterAvatar ||
+                      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'
+                    }
+                    alt={stream.broadcasterName}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                </div>
+              </div>
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full bg-red-600 text-[8px] font-black text-white border border-[#090C15] uppercase tracking-wider animate-pulse shadow-md">
+                LIVE
+              </span>
+            </div>
+            <span className="text-[11px] font-extrabold text-red-400 truncate max-w-[68px]">
+              {stream.broadcasterName}
+            </span>
+          </div>
+        ))}
 
       {/* Friends Stories with Gradient Rings */}
       {stories.slice(1).map((story, idx) => {

@@ -104,41 +104,58 @@ export const Feed = () => {
 
       {/* Real-time Active Live Streams Tray */}
       {activeLiveStreams && activeLiveStreams.length > 0 && (
-        <div className="mx-2 p-3 rounded-2xl bg-gradient-to-r from-red-950/60 via-slate-900 to-purple-950/50 border border-red-500/40 shadow-xl flex items-center justify-between animate-in fade-in slide-in-from-top duration-300">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <img
-                src={activeLiveStreams[0].broadcasterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'}
-                alt={activeLiveStreams[0].broadcasterName}
-                className="w-12 h-12 rounded-full object-cover border-2 border-red-500 shadow-md ring-2 ring-red-500/30 ring-offset-2 ring-offset-slate-900 animate-pulse"
-              />
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-red-600 rounded-md text-[8px] font-black text-white uppercase tracking-wider">
-                LIVE
-              </span>
-            </div>
+        <div className="flex flex-col gap-2 mx-1">
+          {activeLiveStreams.map((stream) => (
+            <div
+              key={stream.id || stream.broadcasterId}
+              className="p-3 rounded-2xl bg-gradient-to-r from-red-950/70 via-slate-900 to-purple-950/60 border border-red-500/40 shadow-xl flex items-center justify-between animate-in fade-in slide-in-from-top duration-300"
+            >
+              <div
+                onClick={() => watchLive(stream)}
+                className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 pr-2 group"
+              >
+                <div className="relative flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 shadow-md animate-pulse">
+                    <img
+                      src={
+                        stream.broadcasterAvatar ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'
+                      }
+                      alt={stream.broadcasterName}
+                      className="w-full h-full rounded-full object-cover border border-[#090C15]"
+                    />
+                  </div>
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-red-600 rounded-md text-[8px] font-black text-white uppercase tracking-wider">
+                    LIVE
+                  </span>
+                </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-white">{activeLiveStreams[0].broadcasterName}</span>
-                <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-extrabold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-                  Broadcasting Now
-                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-white group-hover:text-red-300 transition-colors truncate">
+                      {stream.broadcasterName}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-extrabold flex items-center gap-1 flex-shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                      Broadcasting Now
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-medium truncate max-w-[200px] sm:max-w-xs">
+                    {stream.title || 'Live Stream Session'}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-slate-300 font-medium truncate max-w-[180px] sm:max-w-xs">
-                {activeLiveStreams[0].title || 'Live Stream Session'}
-              </p>
-            </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => watchLive(activeLiveStreams[0])}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/40 active:scale-95 transition-all flex items-center gap-1.5"
-          >
-            <Radio className="w-3.5 h-3.5" />
-            <span>Watch Live</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => watchLive(stream)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/40 active:scale-95 transition-all flex items-center gap-1.5 flex-shrink-0"
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Watch Live</span>
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

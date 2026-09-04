@@ -290,9 +290,19 @@ class RealtimeService {
       this.peer.on('call', (call) => {
         this.activeCalls.set(call.peer, call);
         if (this.localStream) {
-          call.answer(this.localStream);
+          try {
+            call.answer(this.localStream);
+          } catch (e) {
+            console.warn('Call answer error:', e);
+          }
         } else {
-          call.answer();
+          try {
+            const fallback = this.createReceiveOnlyStream();
+            if (fallback) call.answer(fallback);
+            else call.answer();
+          } catch (e) {
+            call.answer();
+          }
         }
 
         call.on('stream', (remoteStream) => {
@@ -441,21 +451,57 @@ class RealtimeService {
   }
 
   /**
+   * Helper to generate a minimal receive-only media stream so PeerJS call negotiation works
+   */
+  createReceiveOnlyStream() {
+    try {
+      if (typeof document !== 'undefined') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 2;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, 2, 2);
+        }
+        if (canvas.captureStream) {
+          return canvas.captureStream(1);
+        }
+      }
+    } catch (e) {
+      console.warn('Canvas captureStream fallback error:', e);
+    }
+    return null;
+  }
+
+  /**
    * Start a Live Stream broadcast
    */
   startLiveBroadcast(stream, streamInfo) {
     this.localStream = stream;
 
+    const resolvedPeerId =
+      this.peerId ||
+      formatPeerId(streamInfo.linkupId || streamInfo.broadcasterUsername || streamInfo.broadcasterId);
+
     const broadcastPayload = {
       ...streamInfo,
-      peerId: this.peerId,
+      peerId: resolvedPeerId,
+      broadcasterPeerId: resolvedPeerId,
+      broadcasterUsername: streamInfo.broadcasterUsername,
       startTime: Date.now(),
       isLive: true,
     };
 
     try {
       const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
-      const filtered = activeLives.filter((l) => l.broadcasterId !== streamInfo.broadcasterId);
+      const filtered = activeLives.filter(
+        (l) =>
+          l.broadcasterId !== streamInfo.broadcasterId &&
+          (l.broadcasterUsername && streamInfo.broadcasterUsername
+            ? l.broadcasterUsername.toLowerCase() !== streamInfo.broadcasterUsername.toLowerCase()
+            : true)
+      );
       filtered.unshift(broadcastPayload);
       localStorage.setItem('linkup_active_live_streams', JSON.stringify(filtered));
     } catch {}
@@ -468,7 +514,9 @@ class RealtimeService {
    */
   stopLiveBroadcast(broadcasterId) {
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
+      try {
+        this.localStream.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
       this.localStream = null;
     }
 
@@ -485,18 +533,39 @@ class RealtimeService {
    * Join and watch another user's live stream via WebRTC or cloud
    */
   watchLiveStream(broadcasterPeerId, onStreamCallback) {
-    if (!this.peer || !broadcasterPeerId) return null;
+    if (!broadcasterPeerId) return null;
 
-    try {
-      const call = this.peer.call(broadcasterPeerId, null);
-      if (call) {
-        call.on('stream', (remoteStream) => {
-          if (onStreamCallback) onStreamCallback(remoteStream);
-        });
-        return call;
+    const executeCall = (peerInstance) => {
+      try {
+        const receiveStream = this.createReceiveOnlyStream();
+        const call = receiveStream
+          ? peerInstance.call(broadcasterPeerId, receiveStream)
+          : (peerInstance.call(broadcasterPeerId, null).catch ? null : null);
+
+        if (call) {
+          call.on('stream', (remoteStream) => {
+            if (onStreamCallback) onStreamCallback(remoteStream);
+          });
+          call.on('error', (err) => {
+            console.warn('Broadcaster WebRTC stream error:', err);
+          });
+          this.activeCalls.set(broadcasterPeerId, call);
+          return call;
+        }
+      } catch (err) {
+        console.warn('Error calling broadcaster:', err);
       }
-    } catch (err) {
-      console.warn('Error calling broadcaster:', err);
+      return null;
+    };
+
+    if (this.peer && !this.peer.destroyed) {
+      if (this.peer.open) {
+        return executeCall(this.peer);
+      } else {
+        this.peer.once('open', () => {
+          executeCall(this.peer);
+        });
+      }
     }
     return null;
   }

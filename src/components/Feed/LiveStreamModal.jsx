@@ -76,12 +76,47 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
       id: `stream-${Date.now()}`,
       broadcasterId: activeUser.id,
       broadcasterName: activeUser.name,
+      broadcasterUsername: activeUser.username,
       broadcasterAvatar: activeUser.avatar,
       title: streamTitle,
       linkupId: activeUser.linkupId,
     };
 
-    realtime.startLiveBroadcast(streamRef.current, streamInfo);
+    let liveStreamMedia = streamRef.current;
+    if (!liveStreamMedia) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#0a0d18';
+          ctx.fillRect(0, 0, 640, 480);
+          ctx.fillStyle = '#a855f7';
+          ctx.font = 'bold 24px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🔴 LIVE ON LINKUP', 320, 200);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '18px sans-serif';
+          ctx.fillText(activeUser.name || 'Broadcaster', 320, 240);
+        }
+        if (canvas.captureStream) {
+          liveStreamMedia = canvas.captureStream(15);
+        }
+      } catch (e) {}
+    }
+
+    realtime.startLiveBroadcast(liveStreamMedia, streamInfo);
+
+    // Heartbeat interval every 15s to keep stream active and broadcast to any freshly joined friends
+    const heartbeatInterval = setInterval(() => {
+      realtime.broadcast('LIVE_STREAM_STARTED', {
+        ...streamInfo,
+        peerId: realtime.peerId,
+        broadcasterPeerId: realtime.peerId,
+        isLive: true,
+      });
+    }, 15000);
 
     // Subscribe to incoming comments from real viewers
     const unsubComment = realtime.subscribe('LIVE_STREAM_COMMENT', (payload) => {
@@ -96,6 +131,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
     });
 
     return () => {
+      clearInterval(heartbeatInterval);
       unsubComment();
       unsubHeart();
       realtime.stopLiveBroadcast(activeUser.id);

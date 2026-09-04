@@ -179,9 +179,53 @@ export const SocialProvider = ({ children }) => {
     const unsubLiveStart = realtime.subscribe('LIVE_STREAM_STARTED', (streamPayload) => {
       if (streamPayload && streamPayload.broadcasterId) {
         setActiveLiveStreams((prev) => {
-          const filtered = prev.filter((s) => s.broadcasterId !== streamPayload.broadcasterId);
+          const filtered = prev.filter(
+            (s) =>
+              s.broadcasterId !== streamPayload.broadcasterId &&
+              (s.broadcasterUsername && streamPayload.broadcasterUsername
+                ? s.broadcasterUsername.toLowerCase() !== streamPayload.broadcasterUsername.toLowerCase()
+                : true)
+          );
           return [streamPayload, ...filtered];
         });
+
+        // If not broadcasting self, notify user that their friend is LIVE!
+        const isSelf =
+          user &&
+          ((streamPayload.broadcasterId && streamPayload.broadcasterId === user.id) ||
+            (streamPayload.broadcasterUsername &&
+              user.username &&
+              streamPayload.broadcasterUsername.toLowerCase() === user.username.toLowerCase()) ||
+            (streamPayload.linkupId &&
+              user.linkupId &&
+              streamPayload.linkupId.toLowerCase() === user.linkupId.toLowerCase()));
+
+        if (!isSelf) {
+          setNotifications((prev) => {
+            const notifId = `live-notif-${streamPayload.broadcasterId || streamPayload.broadcasterUsername}`;
+            if (prev.some((n) => n.id === notifId)) return prev;
+
+            const newNotif = {
+              id: notifId,
+              type: 'live',
+              action: `started a LIVE video broadcast: "${streamPayload.title || 'Live Stream'}" 🔴`,
+              user: {
+                id: streamPayload.broadcasterId,
+                name: streamPayload.broadcasterName || 'Friend',
+                username: streamPayload.broadcasterUsername || 'friend',
+                avatar:
+                  streamPayload.broadcasterAvatar ||
+                  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+                linkupId: streamPayload.linkupId,
+              },
+              time: 'Just now',
+              read: false,
+              section: 'New',
+              liveStream: streamPayload,
+            };
+            return [newNotif, ...prev];
+          });
+        }
       }
     });
 
@@ -408,6 +452,19 @@ export const SocialProvider = ({ children }) => {
   // Sync past and incoming friend requests and direct messages from the cloud relay
   useEffect(() => {
     const syncCloudData = () => {
+      try {
+        // Sync active live streams
+        const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
+        const freshLives = activeLives.filter((l) => Date.now() - (l.startTime || 0) < 3600000);
+        if (freshLives.length > 0) {
+          setActiveLiveStreams((prev) => {
+            const map = new Map();
+            [...freshLives, ...prev].forEach((s) => map.set(s.broadcasterId, s));
+            return Array.from(map.values());
+          });
+        }
+      } catch (e) {}
+
       if (!user) return;
 
       // 1. Sync friend requests

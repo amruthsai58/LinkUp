@@ -36,17 +36,29 @@ export const LiveViewerModal = ({ liveStream, isOpen, onClose }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  const [hasLiveVideo, setHasLiveVideo] = useState(false);
+
   useEffect(() => {
     if (!isOpen || !liveStream) return;
 
     setIsEnded(false);
+    setHasLiveVideo(false);
 
-    // Connect to broadcaster via WebRTC Call if available
-    if (liveStream.peerId) {
-      const call = realtime.watchLiveStream(liveStream.peerId, (remoteStream) => {
+    // Resolve broadcaster's exact WebRTC peer ID
+    const targetPeerId =
+      liveStream.peerId ||
+      liveStream.broadcasterPeerId ||
+      formatPeerId(liveStream.linkupId || liveStream.broadcasterUsername || liveStream.broadcasterId);
+
+    // Connect to broadcaster via WebRTC Call
+    if (targetPeerId) {
+      const call = realtime.watchLiveStream(targetPeerId, (remoteStream) => {
         if (videoRef.current) {
           videoRef.current.srcObject = remoteStream;
-          videoRef.current.play().catch(() => {});
+          videoRef.current
+            .play()
+            .then(() => setHasLiveVideo(true))
+            .catch(() => setHasLiveVideo(true));
         }
       });
       callRef.current = call;
@@ -66,39 +78,28 @@ export const LiveViewerModal = ({ liveStream, isOpen, onClose }) => {
 
     // Subscribe to live ended announcement
     const unsubscribeEnded = realtime.subscribe('LIVE_STREAM_STOPPED', (payload) => {
-      if (payload && payload.broadcasterId === liveStream.broadcasterId) {
+      if (
+        payload &&
+        (payload.broadcasterId === liveStream.broadcasterId ||
+          payload.broadcasterId === liveStream.linkupId)
+      ) {
         setIsEnded(true);
       }
     });
 
-    // Fallback: If WebRTC stream isn't immediately connected (e.g. cross-tab test on same device camera lock), request media or show camera feed
-    const setupFallbackVideo = async () => {
-      try {
-        if (!videoRef.current?.srcObject && navigator.mediaDevices?.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          if (videoRef.current && !isEnded) {
-            videoRef.current.srcObject = stream;
-          }
-        }
-      } catch {}
-    };
-
-    const timer = setTimeout(() => {
-      if (!videoRef.current?.srcObject) {
-        setupFallbackVideo();
-      }
-    }, 1500);
-
     return () => {
-      clearTimeout(timer);
       unsubscribeComments();
       unsubscribeHearts();
       unsubscribeEnded();
       if (callRef.current) {
-        callRef.current.close();
+        try {
+          callRef.current.close();
+        } catch (e) {}
       }
       if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+        try {
+          videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+        } catch (e) {}
       }
     };
   }, [isOpen, liveStream]);
@@ -197,13 +198,62 @@ export const LiveViewerModal = ({ liveStream, isOpen, onClose }) => {
 
         {/* Video Canvas Stage */}
         <div className="relative flex-1 bg-slate-950 flex items-center justify-center overflow-hidden">
+          {/* Ambient Video Player */}
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted={isMuted}
-            className="w-full h-full object-cover"
+            onLoadedData={() => setHasLiveVideo(true)}
+            onPlaying={() => setHasLiveVideo(true)}
+            className={`w-full h-full object-cover transition-opacity duration-500 ${
+              hasLiveVideo ? 'opacity-100' : 'opacity-0 absolute inset-0'
+            }`}
           />
+
+          {/* High-quality Broadcaster Live Stage Visualizer */}
+          {!hasLiveVideo && !isEnded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-slate-950 via-[#0B0F1C] to-slate-950">
+              {/* Pulsing Avatar with Glowing Ring */}
+              <div className="relative mb-6">
+                <div className="w-28 h-28 rounded-full p-1 bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 shadow-2xl shadow-red-600/40 animate-pulse">
+                  <img
+                    src={
+                      liveStream.broadcasterAvatar ||
+                      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80'
+                    }
+                    alt={liveStream.broadcasterName}
+                    className="w-full h-full rounded-full object-cover border-2 border-[#090C15]"
+                  />
+                </div>
+                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-red-600 text-[10px] font-black text-white border-2 border-[#090C15] uppercase tracking-wider animate-pulse shadow-lg">
+                  LIVE
+                </span>
+              </div>
+
+              <h3 className="text-base sm:text-lg font-black text-white mb-1">
+                {liveStream.broadcasterName}
+              </h3>
+              <p className="text-xs text-purple-400 font-bold mb-2">
+                @{liveStream.broadcasterUsername || 'broadcaster'}
+              </p>
+              <div className="px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-xs text-slate-300 max-w-xs truncate mb-4">
+                {liveStream.title || 'Live Broadcast Session'}
+              </div>
+
+              {/* Animated Soundwave Equalizer Bars */}
+              <div className="flex items-center gap-1.5 h-6">
+                <span className="w-1.5 bg-red-500 rounded-full animate-bounce [animation-delay:-0.3s] h-4" />
+                <span className="w-1.5 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.15s] h-6" />
+                <span className="w-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.45s] h-3" />
+                <span className="w-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.2s] h-5" />
+                <span className="w-1.5 bg-red-500 rounded-full animate-bounce [animation-delay:-0.35s] h-4" />
+              </div>
+              <span className="text-[11px] text-slate-400 mt-2 font-medium">
+                Live audio & video streaming active
+              </span>
+            </div>
+          )}
 
           {/* Fallback ambient visualizer if camera stream loading */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 pointer-events-none" />

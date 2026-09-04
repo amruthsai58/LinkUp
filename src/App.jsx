@@ -17,7 +17,6 @@ import { NotificationsView } from './components/Notifications/NotificationsView'
 import { MenuView } from './components/Navigation/MenuView';
 
 import { AuthModal } from './components/Auth/AuthModal';
-import { GoogleAuthModal } from './components/Auth/GoogleAuthModal';
 import { CreatePostModal } from './components/Feed/CreatePostModal';
 import { StoryViewerModal } from './components/Stories/StoryViewerModal';
 import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
@@ -86,7 +85,6 @@ const MainAppContent = () => {
 
       {/* Interactive Overlays */}
       <AuthModal />
-      <GoogleAuthModal />
       <CreatePostModal />
       <StoryViewerModal />
       <StoryCreatorModal />

@@ -473,6 +473,66 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Change Password for Authenticated User
+  const changePassword = (currentPassword, newPassword) => {
+    if (!user) {
+      throw new Error('You must be logged in to change your password');
+    }
+
+    // Verify current password if user has one set
+    if (user.password && currentPassword !== user.password) {
+      throw new Error('Current password is incorrect');
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters');
+    }
+
+    if (user.password && currentPassword === newPassword) {
+      throw new Error('New password must be different from current password');
+    }
+
+    updateUserProfile({ password: newPassword });
+    return true;
+  };
+
+  // Reset Password for users (e.g. from forgot password flow)
+  const resetPassword = (identifier, newPassword) => {
+    const cleanId = (identifier || '').trim().toLowerCase();
+    if (!cleanId) {
+      throw new Error('Please enter your email or username');
+    }
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters');
+    }
+
+    const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+    const normalizedTarget = normalizeEmail(cleanId);
+    const userIndex = savedDb.findIndex(
+      (u) =>
+        u.username?.toLowerCase() === cleanId ||
+        u.email?.toLowerCase() === cleanId ||
+        u.linkupId?.toLowerCase() === cleanId ||
+        (u.email && normalizeEmail(u.email) === normalizedTarget)
+    );
+
+    if (userIndex === -1) {
+      throw new Error('No account found with this email or username');
+    }
+
+    savedDb[userIndex].password = newPassword;
+    localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+
+    // If current session matches this user, update active session too
+    if (user && (user.id === savedDb[userIndex].id || user.username?.toLowerCase() === savedDb[userIndex].username?.toLowerCase())) {
+      const updatedUser = { ...user, password: newPassword };
+      setUser(updatedUser);
+      localStorage.setItem('linkup_auth_user', JSON.stringify(updatedUser));
+    }
+
+    return true;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -490,6 +550,8 @@ export const AuthProvider = ({ children }) => {
         logout,
         deleteAccount,
         updateUserProfile,
+        changePassword,
+        resetPassword,
         toggle2FA,
         searchRegisteredUsers,
       }}

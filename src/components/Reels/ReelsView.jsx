@@ -133,7 +133,7 @@ export const ReelsView = () => {
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="relative w-full h-[84vh] max-h-[820px] rounded-3xl overflow-hidden bg-black flex flex-col justify-between shadow-2xl select-none"
+      className="relative w-full h-[calc(100dvh-135px)] sm:h-[84vh] sm:max-h-[820px] rounded-2xl sm:rounded-3xl overflow-hidden bg-black flex flex-col justify-between shadow-2xl select-none"
     >
       {/* Top Header Bar */}
       <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between text-white drop-shadow-md">

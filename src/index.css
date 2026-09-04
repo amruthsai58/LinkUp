@@ -8,6 +8,11 @@
     --brand-purple: #8B5CF6;
     --brand-pink: #EC4899;
   }
+
+  html, body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* Custom Scrollbars */

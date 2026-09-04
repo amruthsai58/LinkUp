@@ -16,7 +16,7 @@ export const BottomNavBar = () => {
   const user = authUser || CURRENT_USER;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#090C15]/95 backdrop-blur-2xl border-t border-slate-800/80 max-w-md mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl px-4 py-2.5 flex items-center justify-around select-none">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#090C15]/95 backdrop-blur-2xl border-t border-slate-800/80 max-w-md mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] flex items-center justify-around select-none">
       {/* Home Button */}
       <button
         type="button"

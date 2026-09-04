@@ -131,8 +131,8 @@ export const CreatePostModal = () => {
         className="hidden"
       />
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
-        <div className="relative w-full max-w-lg bg-[#0A0D18] border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 bg-black/95 sm:bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
+        <div className="relative w-full max-w-lg bg-[#0A0D18] border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
             <button

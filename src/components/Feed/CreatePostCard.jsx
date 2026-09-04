@@ -385,12 +385,12 @@ export const CreatePostCard = () => {
         </div>
 
         {/* Bottom Tool Icons Bar */}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800/80 text-slate-400">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1 mt-3 pt-3 border-t border-slate-800/80 text-slate-400">
           {/* Upload Photo from Local Media */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-emerald-400 text-xs font-semibold transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-emerald-400 text-xs font-semibold transition-colors"
             title="Upload Photos from device"
           >
             <ImageIcon className="w-4 h-4" />
@@ -401,7 +401,7 @@ export const CreatePostCard = () => {
           <button
             type="button"
             onClick={() => setIsLiveBroadcasterOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/15 hover:bg-red-600/25 text-red-400 hover:text-red-300 text-xs font-bold border border-red-500/30 transition-all hover:scale-105"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/15 hover:bg-red-600/25 text-red-400 hover:text-red-300 text-xs font-bold border border-red-500/30 transition-all hover:scale-105"
             title="Start a Live Broadcast"
           >
             <Radio className="w-4 h-4 animate-pulse text-red-500" />
@@ -412,7 +412,7 @@ export const CreatePostCard = () => {
           <button
             type="button"
             onClick={() => videoInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-rose-400 text-xs font-semibold transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-rose-400 text-xs font-semibold transition-colors"
             title="Upload Videos from device"
           >
             <Video className="w-4 h-4" />
@@ -423,7 +423,7 @@ export const CreatePostCard = () => {
           <button
             type="button"
             onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 hover:from-purple-500/20 text-purple-300 hover:text-pink-200 text-xs font-bold border border-purple-500/30 transition-all hover:scale-105"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 hover:from-purple-500/20 text-purple-300 hover:text-pink-200 text-xs font-bold border border-purple-500/30 transition-all hover:scale-105"
           >
             <Wand2 className="w-4 h-4 text-pink-400" />
             <span>AI Assistant</span>
@@ -436,7 +436,7 @@ export const CreatePostCard = () => {
               setCreatePostOpen(true);
               setShowMusicPicker(!showMusicPicker);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all hover:scale-105"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all hover:scale-105"
           >
             <Music className="w-4 h-4 text-pink-400" />
             <span>Song</span>
@@ -448,10 +448,10 @@ export const CreatePostCard = () => {
               setCreatePostOpen(true);
               setShowFeelingPicker(!showFeelingPicker);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-semibold transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-semibold transition-colors"
           >
             <Smile className="w-4 h-4" />
-            <span className="hidden sm:inline">Feeling</span>
+            <span>Feeling</span>
           </button>
         </div>
       </div>

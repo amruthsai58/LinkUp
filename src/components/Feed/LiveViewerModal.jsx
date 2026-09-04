@@ -141,8 +141,8 @@ export const LiveViewerModal = ({ liveStream, isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
-      <div className="relative w-full max-w-lg h-[92vh] max-h-[820px] bg-[#070A12] border border-slate-800 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 sm:bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
+      <div className="relative w-full max-w-lg h-full sm:h-[92dvh] sm:max-h-[820px] bg-[#070A12] border-0 sm:border border-slate-800 rounded-none sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         {/* Top Floating Header */}
         <div className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between">
           <div className="flex items-center gap-3">

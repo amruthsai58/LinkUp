@@ -91,7 +91,7 @@ export const DirectChatView = () => {
   }
 
   return (
-    <div className="w-full flex flex-col h-[82vh] max-h-[800px] bg-[#090C15] rounded-3xl border border-slate-800 overflow-hidden select-none text-slate-100 shadow-2xl">
+    <div className="w-full flex flex-col h-[calc(100dvh-135px)] sm:h-[82vh] sm:max-h-[800px] bg-[#090C15] rounded-2xl sm:rounded-3xl border border-slate-800 overflow-hidden select-none text-slate-100 shadow-2xl">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md">
         <div className="flex items-center gap-2.5">

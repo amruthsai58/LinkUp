@@ -20,6 +20,7 @@ class RealtimeService {
     this.localStream = null;
     this.isInitialized = false;
     this.eventSource = null;
+    this.processedMessageIds = new Set();
 
     // 1. Cross-tab / Cross-window broadcast channel for local multi-user testing
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -64,7 +65,9 @@ class RealtimeService {
             if (data && data.message) {
               const parsed = JSON.parse(data.message);
               if (parsed.type && parsed.payload) {
-                this.handleIncomingPayload(parsed.type, parsed.payload, true);
+                // Historical playback should only populate cache, not trigger live notifications or duplicate message alerts
+                const isLiveAlert = parsed.type !== 'NEW_DIRECT_MESSAGE' && parsed.type !== 'UNSEND_DIRECT_MESSAGE';
+                this.handleIncomingPayload(parsed.type, parsed.payload, isLiveAlert);
               }
             }
           } catch {}
@@ -145,15 +148,27 @@ class RealtimeService {
       } catch {}
     }
 
-    // 4. Persist incoming messages into cloud cache
-    if (type === 'NEW_DIRECT_MESSAGE' && payload && payload.recipientUsername) {
-      try {
-        const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
-        if (!msgs.some((m) => m.id === payload.id || (m.timestamp === payload.timestamp && m.senderUsername === payload.senderUsername))) {
-          msgs.unshift(payload);
-          localStorage.setItem('linkup_cloud_messages', JSON.stringify(msgs));
-        }
-      } catch {}
+    // 4. Persist incoming messages into cloud cache with deduplication
+    if (type === 'NEW_DIRECT_MESSAGE' && payload) {
+      const dedupKey = payload.id || `${payload.senderId || payload.senderUsername}_${payload.timestamp}_${payload.text}`;
+      if (this.processedMessageIds.has(dedupKey)) {
+        return; // Already processed! Never duplicate emit!
+      }
+      this.processedMessageIds.add(dedupKey);
+      if (this.processedMessageIds.size > 1000) {
+        const oldest = this.processedMessageIds.values().next().value;
+        this.processedMessageIds.delete(oldest);
+      }
+
+      if (payload.recipientUsername) {
+        try {
+          const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+          if (!msgs.some((m) => m.id === payload.id || (m.timestamp === payload.timestamp && m.senderUsername === payload.senderUsername))) {
+            msgs.unshift(payload);
+            localStorage.setItem('linkup_cloud_messages', JSON.stringify(msgs));
+          }
+        } catch {}
+      }
     }
 
     if (triggerEmit) {
@@ -426,26 +441,29 @@ class RealtimeService {
       timestamp: Date.now(),
     };
 
-    // Broadcasts across local tabs + global cloud relay
+    // Mark as processed so sender never re-processes their own broadcast loopback
+    if (payload.id) {
+      this.processedMessageIds.add(payload.id);
+    }
+
+    // Broadcasts across local tabs + global cloud relay + existing WebRTC connections
     this.broadcast('NEW_DIRECT_MESSAGE', payload);
 
-    // Direct WebRTC channel
+    // If direct WebRTC connection is not already open, initiate connection and send
     const targetPeerId = formatPeerId(recipient.linkupId || recipient.username || recipient.id);
 
     if (this.peer && targetPeerId && targetPeerId !== this.peerId) {
-      try {
-        let conn = this.activeConnections.get(targetPeerId);
-        if (!conn || !conn.open) {
-          conn = this.peer.connect(targetPeerId);
+      const existingConn = this.activeConnections.get(targetPeerId);
+      if (!existingConn || !existingConn.open) {
+        try {
+          const conn = this.peer.connect(targetPeerId);
           this.setupConnection(conn);
           conn.on('open', () => {
             conn.send({ type: 'NEW_DIRECT_MESSAGE', payload });
           });
-        } else {
-          conn.send({ type: 'NEW_DIRECT_MESSAGE', payload });
+        } catch (err) {
+          console.warn('P2P message connection fallback:', err);
         }
-      } catch (err) {
-        console.warn('P2P message transmission fallback:', err);
       }
     }
   }

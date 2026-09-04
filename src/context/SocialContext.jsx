@@ -237,7 +237,7 @@ export const SocialProvider = ({ children }) => {
       }
     });
 
-    // 3. Subscribe to incoming Real-Time Direct Messages
+    // 3. Subscribe to incoming Real-Time Direct Messages with Strict Deduplication
     const unsubMessages = realtime.subscribe('NEW_DIRECT_MESSAGE', (payload) => {
       if (!payload || !user) return;
 
@@ -247,21 +247,46 @@ export const SocialProvider = ({ children }) => {
         payload.recipientId === user.linkupId;
 
       if (isForMe) {
+        // Prevent duplicate processing if sender is current user (loopback / broadcast echo)
+        const currentUserId = user.id || CURRENT_USER.id;
+        const currentUsername = (user.username || CURRENT_USER.username || '').toLowerCase();
+        if (
+          payload.senderId === currentUserId ||
+          (payload.senderUsername && payload.senderUsername.toLowerCase() === currentUsername)
+        ) {
+          return;
+        }
+
+        const msgId = payload.id;
         const incomingMsg = {
-          id: payload.id || `m-${Date.now()}`,
+          id: msgId || `m-${payload.timestamp || Date.now()}`,
           senderId: payload.senderId,
           text: payload.text,
           time: payload.time || 'Just now',
+          seen: false,
+          timestamp: payload.timestamp || Date.now(),
         };
 
         setConversations((prev) => {
           let matched = false;
           const updated = prev.map((c) => {
-            if (
+            const isTargetFriend =
               c.friend?.id === payload.senderId ||
-              (c.friend?.username && payload.senderUsername && c.friend.username.toLowerCase() === payload.senderUsername.toLowerCase())
-            ) {
+              (c.friend?.username && payload.senderUsername && c.friend.username.toLowerCase() === payload.senderUsername.toLowerCase()) ||
+              (c.friend?.linkupId && payload.senderLinkUpId && c.friend.linkupId.toLowerCase() === payload.senderLinkUpId.toLowerCase());
+
+            if (isTargetFriend) {
               matched = true;
+              // Strict Deduplication: never append if identical message ID or duplicate recent text exists
+              const alreadyExists = c.messages.some(
+                (m) =>
+                  (msgId && m.id === msgId) ||
+                  (m.senderId === payload.senderId &&
+                   m.text === payload.text &&
+                   Math.abs((m.timestamp || 0) - (payload.timestamp || 0)) < 6000)
+              );
+              if (alreadyExists) return c;
+
               return {
                 ...c,
                 lastMessage: payload.text,
@@ -294,11 +319,22 @@ export const SocialProvider = ({ children }) => {
         });
 
         setActiveConversation((prev) => {
-          if (
-            prev &&
-            (prev.friend?.id === payload.senderId ||
-             (prev.friend?.username && payload.senderUsername && prev.friend.username.toLowerCase() === payload.senderUsername.toLowerCase()))
-          ) {
+          if (!prev) return prev;
+          const isTargetFriend =
+            prev.friend?.id === payload.senderId ||
+            (prev.friend?.username && payload.senderUsername && prev.friend.username.toLowerCase() === payload.senderUsername.toLowerCase()) ||
+            (prev.friend?.linkupId && payload.senderLinkUpId && prev.friend.linkupId.toLowerCase() === payload.senderLinkUpId.toLowerCase());
+
+          if (isTargetFriend) {
+            const alreadyExists = prev.messages.some(
+              (m) =>
+                (msgId && m.id === msgId) ||
+                (m.senderId === payload.senderId &&
+                 m.text === payload.text &&
+                 Math.abs((m.timestamp || 0) - (payload.timestamp || 0)) < 6000)
+            );
+            if (alreadyExists) return prev;
+
             return {
               ...prev,
               lastMessage: payload.text,
@@ -309,21 +345,37 @@ export const SocialProvider = ({ children }) => {
           return prev;
         });
 
-        // Add to notifications
-        setNotifications((prev) => [
-          {
-            id: `notif-${Date.now()}`,
-            type: 'message',
-            user: {
-              name: payload.senderName || 'New Message',
-              avatar: payload.senderAvatar,
+        // Add to notifications with deduplication
+        setNotifications((prev) => {
+          const notifKey = `notif-msg-${msgId || payload.timestamp}`;
+          if (
+            prev.some(
+              (n) =>
+                n.id === notifKey ||
+                (n.text === payload.text &&
+                 n.user?.username?.toLowerCase() === payload.senderUsername?.toLowerCase() &&
+                 Date.now() - (n.createdAt || 0) < 6000)
+            )
+          ) {
+            return prev;
+          }
+          return [
+            {
+              id: notifKey,
+              createdAt: Date.now(),
+              type: 'message',
+              user: {
+                name: payload.senderName || 'New Message',
+                username: payload.senderUsername,
+                avatar: payload.senderAvatar,
+              },
+              text: payload.text,
+              time: 'Just now',
+              read: false,
             },
-            text: payload.text,
-            time: 'Just now',
-            read: false,
-          },
-          ...prev,
-        ]);
+            ...prev,
+          ];
+        });
       }
     });
 
@@ -669,10 +721,12 @@ export const SocialProvider = ({ children }) => {
 
           if (isForMe) {
             const incomingMsg = {
-              id: payload.id || `m-${Date.now()}`,
+              id: payload.id || `m-${payload.timestamp || Date.now()}`,
               senderId: payload.senderId,
               text: payload.text,
               time: payload.time || 'Just now',
+              seen: false,
+              timestamp: payload.timestamp || Date.now(),
             };
 
             setConversations((prev) => {
@@ -687,7 +741,15 @@ export const SocialProvider = ({ children }) => {
                     c.friend?.id === payload.senderId ||
                     (c.friend?.username && payload.senderUsername && c.friend.username.toLowerCase() === payload.senderUsername.toLowerCase())
                   ) {
-                    if (c.messages.some((m) => m.id === incomingMsg.id)) return c;
+                    const alreadyPresent = c.messages.some(
+                      (m) =>
+                        (payload.id && m.id === payload.id) ||
+                        (m.senderId === payload.senderId &&
+                         m.text === payload.text &&
+                         Math.abs((m.timestamp || 0) - (payload.timestamp || 0)) < 6000)
+                    );
+                    if (alreadyPresent) return c;
+
                     return {
                       ...c,
                       lastMessage: payload.text,
@@ -987,12 +1049,14 @@ export const SocialProvider = ({ children }) => {
   const sendDirectMessage = (conversationId, text) => {
     if (!text.trim()) return;
 
+    const now = Date.now();
     const newMsg = {
-      id: `m-${Date.now()}`,
+      id: `m-${now}-${Math.random().toString(36).slice(2, 7)}`,
       senderId: user?.id || CURRENT_USER.id,
-      text,
+      text: text.trim(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       seen: false,
+      timestamp: now,
     };
 
     const conv = conversations.find((c) => c.id === conversationId);
@@ -1002,7 +1066,7 @@ export const SocialProvider = ({ children }) => {
         c.id === conversationId
           ? {
               ...c,
-              lastMessage: text,
+              lastMessage: text.trim(),
               time: 'Just now',
               messages: [...c.messages, newMsg],
             }
@@ -1013,7 +1077,7 @@ export const SocialProvider = ({ children }) => {
     if (activeConversation?.id === conversationId) {
       setActiveConversation((prev) => ({
         ...prev,
-        lastMessage: text,
+        lastMessage: text.trim(),
         time: 'Just now',
         messages: [...prev.messages, newMsg],
       }));
@@ -1031,6 +1095,7 @@ export const SocialProvider = ({ children }) => {
         text: newMsg.text,
         time: newMsg.time,
         seen: false,
+        timestamp: newMsg.timestamp,
       });
     }
   };

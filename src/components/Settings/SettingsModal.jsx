@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocial } from '../../context/SocialContext';
+import { DeleteAccountModal } from './DeleteAccountModal';
 
 export const SettingsModal = () => {
   const { user, updateUserProfile, toggle2FA } = useAuth();
@@ -22,6 +23,7 @@ export const SettingsModal = () => {
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Form fields
   const [name, setName] = useState(user?.name || '');
@@ -113,6 +115,16 @@ export const SettingsModal = () => {
             }`}
           >
             Download Your Data
+          </button>
+          <button
+            onClick={() => setActiveSettingsTab('danger')}
+            className={`py-3 border-b-2 transition-all ${
+              activeSettingsTab === 'danger'
+                ? 'border-red-500 text-red-400'
+                : 'border-transparent text-slate-400 hover:text-red-400'
+            }`}
+          >
+            Danger Zone
           </button>
         </div>
 
@@ -256,8 +268,36 @@ export const SettingsModal = () => {
               </div>
             </div>
           )}
+
+          {activeSettingsTab === 'danger' && (
+            <div className="flex flex-col gap-4">
+              <div className="p-4 rounded-2xl bg-red-950/20 border border-red-500/30 flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Your LinkUp Account</span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Permanently remove your profile (@{user?.username}), official LinkUp ID ({user?.linkupId}), all created posts, reels, stories, and friends list. This action cannot be undone.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-600/30 flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Account</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

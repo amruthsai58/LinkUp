@@ -439,6 +439,29 @@ export const SocialProvider = ({ children }) => {
       }
     });
 
+    // 7. Subscribe to user account deletions
+    const unsubUserDeleted = realtime.subscribe('USER_ACCOUNT_DELETED', (payload) => {
+      if (payload && (payload.id || payload.username)) {
+        setFriends((prev) =>
+          prev.filter(
+            (f) =>
+              f.id !== payload.id &&
+              (f.username && payload.username ? f.username.toLowerCase() !== payload.username.toLowerCase() : true) &&
+              (f.linkupId && payload.linkupId ? f.linkupId.toLowerCase() !== payload.linkupId.toLowerCase() : true)
+          )
+        );
+        setActiveLiveStreams((prev) =>
+          prev.filter(
+            (s) =>
+              s.broadcasterId !== payload.id &&
+              (s.broadcasterUsername && payload.username
+                ? s.broadcasterUsername.toLowerCase() !== payload.username.toLowerCase()
+                : true)
+          )
+        );
+      }
+    });
+
     return () => {
       unsubLiveStart();
       unsubLiveStop();
@@ -446,6 +469,7 @@ export const SocialProvider = ({ children }) => {
       unsubStory();
       unsubFriendReq();
       unsubReqAccepted();
+      unsubUserDeleted();
     };
   }, [user, activeLiveStreamToWatch]);
 

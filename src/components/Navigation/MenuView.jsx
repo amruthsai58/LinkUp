@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   Film,
@@ -11,14 +11,17 @@ import {
   HelpCircle,
   ChevronRight,
   LogOut,
+  Trash2,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
+import { DeleteAccountModal } from '../Settings/DeleteAccountModal';
 
 export const MenuView = () => {
-  const { setActiveTab } = useSocial();
+  const { setActiveTab, setIsSettingsOpen } = useSocial();
   const { user: authUser, logout } = useAuth();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const user = authUser || CURRENT_USER;
 
@@ -142,11 +145,11 @@ export const MenuView = () => {
 
         <button
           type="button"
-          onClick={() => alert('Settings & Privacy')}
+          onClick={() => setIsSettingsOpen(true)}
           className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-900 text-slate-200 text-xs font-semibold transition-colors"
         >
           <div className="flex items-center gap-3">
-            <Settings className="w-4 h-4 text-slate-400" />
+            <Settings className="w-4 h-4 text-purple-400" />
             <span>Settings & Privacy</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-500" />
@@ -154,7 +157,7 @@ export const MenuView = () => {
 
         <button
           type="button"
-          onClick={() => alert('Help & Support Center')}
+          onClick={() => alert('LinkUp Help & Support Center')}
           className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-900 text-slate-200 text-xs font-semibold transition-colors"
         >
           <div className="flex items-center gap-3">
@@ -168,15 +171,34 @@ export const MenuView = () => {
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-red-500/10 text-red-400 text-xs font-bold transition-colors mt-2"
+          className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-800 text-slate-300 text-xs font-bold transition-colors mt-2 border border-slate-800"
         >
           <div className="flex items-center gap-3">
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4 h-4 text-slate-400" />
             <span>Log Out</span>
           </div>
-          <ChevronRight className="w-4 h-4 text-red-400/60" />
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </button>
+
+        {/* Delete Account (Permanent) */}
+        <button
+          type="button"
+          onClick={() => setIsDeleteModalOpen(true)}
+          className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-red-500/15 text-rose-400 hover:text-rose-300 text-xs font-bold transition-colors mt-2 border border-red-500/20 hover:border-red-500/40"
+        >
+          <div className="flex items-center gap-3">
+            <Trash2 className="w-4 h-4 text-rose-500" />
+            <span>Delete Account</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-rose-500/60" />
         </button>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

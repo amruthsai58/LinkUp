@@ -12,16 +12,19 @@ import {
   GraduationCap,
   Sparkles,
   Check,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { CURRENT_USER } from '../../data/mockSocialData';
 import { fileToBase64 } from '../../utils/imageUtils';
+import { DeleteAccountModal } from '../Settings/DeleteAccountModal';
 
 export const EditProfileModal = ({ isOpen, onClose }) => {
   const { user, updateUserProfile } = useAuth();
   const activeUser = user || CURRENT_USER;
 
   const fileInputRef = useRef(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [name, setName] = useState(activeUser.name || '');
   const [username, setUsername] = useState(activeUser.username || '');
@@ -257,9 +260,28 @@ export const EditProfileModal = ({ isOpen, onClose }) => {
                 <span>Save Changes</span>
               )}
             </button>
+
+            {/* Delete Account Shortcut */}
+            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <span className="text-slate-400">Account danger zone:</span>
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="text-rose-400 hover:text-rose-300 font-bold hover:underline flex items-center gap-1.5 p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                <span>Delete Account</span>
+              </button>
+            </div>
           </form>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </>
   );
 };

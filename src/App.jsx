@@ -22,6 +22,7 @@ import { CreatePostModal } from './components/Feed/CreatePostModal';
 import { StoryViewerModal } from './components/Stories/StoryViewerModal';
 import { StoryCreatorModal } from './components/Stories/StoryCreatorModal';
 import { LiveViewerModal } from './components/Feed/LiveViewerModal';
+import { SettingsModal } from './components/Settings/SettingsModal';
 
 const MainAppContent = () => {
   const {
@@ -85,6 +86,7 @@ const MainAppContent = () => {
       <CreatePostModal />
       <StoryViewerModal />
       <StoryCreatorModal />
+      <SettingsModal />
       <LiveViewerModal
         isOpen={isLiveViewerOpen}
         liveStream={activeLiveStreamToWatch}

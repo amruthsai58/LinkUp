@@ -306,6 +306,58 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('linkup_auth_user');
   };
 
+  const deleteAccount = () => {
+    const target = user;
+    if (!target) return;
+
+    // 1. Remove from localStorage registered users database
+    try {
+      const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      const filteredDb = savedDb.filter(
+        (u) =>
+          u.id !== target.id &&
+          u.username?.toLowerCase() !== target.username?.toLowerCase() &&
+          u.linkupId?.toLowerCase() !== target.linkupId?.toLowerCase() &&
+          (u.email ? u.email.toLowerCase() !== target.email?.toLowerCase() : true)
+      );
+      localStorage.setItem('linkup_registered_users', JSON.stringify(filteredDb));
+    } catch (e) {
+      console.warn('Error removing user from registered database:', e);
+    }
+
+    // 2. Clear current session and following data
+    try {
+      localStorage.removeItem('linkup_auth_user');
+      localStorage.removeItem('linkup_following_usernames');
+      localStorage.removeItem('linkup_active_tab');
+      localStorage.removeItem('linkup_cloud_friend_requests');
+    } catch (e) {}
+
+    // 3. Remove user's own posts from local storage
+    try {
+      const savedPosts = JSON.parse(localStorage.getItem('linkup_posts') || '[]');
+      const filteredPosts = savedPosts.filter(
+        (p) =>
+          p.author?.id !== target.id &&
+          p.author?.username?.toLowerCase() !== target.username?.toLowerCase()
+      );
+      localStorage.setItem('linkup_posts', JSON.stringify(filteredPosts));
+    } catch (e) {}
+
+    // 4. Broadcast account deletion across global network so friends update their state
+    try {
+      realtime.broadcast('USER_ACCOUNT_DELETED', {
+        id: target.id,
+        username: target.username,
+        linkupId: target.linkupId,
+      });
+    } catch (e) {}
+
+    // 5. Reset AuthContext state
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
   const updateUserProfile = (updatedFields) => {
     setUser((prev) => {
       if (!prev) return null;
@@ -395,6 +447,7 @@ export const AuthProvider = ({ children }) => {
         signup,
         loginWithGoogle,
         logout,
+        deleteAccount,
         updateUserProfile,
         toggle2FA,
         searchRegisteredUsers,

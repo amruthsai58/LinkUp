@@ -6,7 +6,7 @@
   "type": "module",
   "homepage": "https://amruthsai58.github.io/LinkUp",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 3000",
     "build": "vite build && node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/404.html');\"",
     "preview": "vite preview",
     "predeploy": "npm run build",

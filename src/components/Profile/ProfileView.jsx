@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ChevronDown,
   ChevronLeft,
@@ -18,22 +18,27 @@ import {
   Check,
   Radio,
   MessageCircle,
+  Users,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
-import { CURRENT_USER } from '../../data/mockSocialData';
+import { CURRENT_USER, INITIAL_FRIENDS } from '../../data/mockSocialData';
+import { realtime } from '../../services/realtimeService';
 import { EditProfileModal } from './EditProfileModal';
 import { HighlightViewerModal } from './HighlightViewerModal';
 import { CreateHighlightModal } from './CreateHighlightModal';
 import { EditHighlightModal } from './EditHighlightModal';
+import { FollowersModal } from './FollowersModal';
 
 export const ProfileView = () => {
   const {
     setActiveTab,
     viewingUser,
     setViewingUser,
+    viewUserProfile,
     toggleFollowFriend,
     friends,
+    setFriends,
     posts,
     openChatWithUser,
     activeLiveStreams,
@@ -49,6 +54,8 @@ export const ProfileView = () => {
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [contextMenuHlId, setContextMenuHlId] = useState(null);
   const [idCopied, setIdCopied] = useState(false);
+  const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
+  const [followersModalTab, setFollowersModalTab] = useState('followers'); // 'followers' | 'following'
 
   // Check if viewing own profile or friend's profile
   const isMyProfile = !viewingUser || (authUser && (
@@ -112,7 +119,273 @@ export const ProfileView = () => {
     ? myPosts.length
     : (friendPosts.length > 0 ? friendPosts.length : (user.postsCount ?? 0));
 
-  // 2. Dynamic Following Calculation
+  // 2. Dynamic Followers & Following Lists for Modal
+  const followersList = useMemo(() => {
+    if (isMyProfile) {
+      const list = [];
+      const seen = new Set();
+      const add = (u) => {
+        const key = u.username?.toLowerCase() || u.linkupId?.toLowerCase() || u.id;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          list.push(u);
+        }
+      };
+
+      // Confirmed friends and incoming requests
+      friends
+        .filter((f) => f.isFriend || f.hasPendingRequest)
+        .forEach((f) => {
+          add({
+            id: f.id,
+            name: f.name,
+            username: f.username,
+            linkupId: f.linkupId,
+            avatar: f.avatar,
+            role: f.role || f.hometown ? `From ${f.hometown}` : 'LinkUp Friend',
+            status: f.status || 'online',
+            isFriend: f.isFriend,
+            isFollowing: Boolean(followedUsers[f.username?.toLowerCase()] || f.isFollowing),
+          });
+        });
+
+      // Cloud friend requests
+      try {
+        const cloudReqs = JSON.parse(localStorage.getItem('linkup_cloud_friend_requests') || '[]');
+        cloudReqs.forEach((r) => {
+          add({
+            id: r.senderId || `user-${r.senderUsername}`,
+            name: r.senderName || r.senderUsername,
+            username: r.senderUsername,
+            linkupId: r.senderLinkUpId || 'LK-CLOUD',
+            avatar: r.senderAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80',
+            role: 'Cloud Connected',
+            status: 'online',
+            isFriend: true,
+            isFollowing: Boolean(followedUsers[r.senderUsername?.toLowerCase()]),
+          });
+        });
+      } catch {}
+
+      // Registered cloud network users
+      try {
+        const regUsers = realtime.getRegisteredUsers();
+        regUsers.forEach((ru) => {
+          if (
+            ru.username &&
+            ru.username.toLowerCase() !== authUser?.username?.toLowerCase() &&
+            ru.username.toLowerCase() !== CURRENT_USER.username.toLowerCase()
+          ) {
+            add({
+              id: ru.id || `reg-${ru.username}`,
+              name: ru.name || ru.username,
+              username: ru.username,
+              linkupId: ru.linkupId || 'LK-NET',
+              avatar: ru.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80',
+              role: ru.role || ru.bio || 'LinkUp Member',
+              status: 'online',
+              isFriend: false,
+              isFollowing: Boolean(followedUsers[ru.username?.toLowerCase()]),
+            });
+          }
+        });
+      } catch {}
+
+      // Initial friends fallback
+      INITIAL_FRIENDS.forEach((f) => {
+        if (f.isFriend) {
+          add({
+            id: f.id,
+            name: f.name,
+            username: f.username,
+            linkupId: f.linkupId,
+            avatar: f.avatar,
+            role: f.hometown ? `From ${f.hometown}` : 'LinkUp Member',
+            status: f.status || 'online',
+            isFriend: true,
+            isFollowing: Boolean(followedUsers[f.username?.toLowerCase()] || f.isFollowing),
+          });
+        }
+      });
+
+      return list;
+    } else {
+      // Friend's profile followers list
+      const list = [];
+      const seen = new Set();
+      const add = (u) => {
+        const key = u.username?.toLowerCase() || u.id;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          list.push(u);
+        }
+      };
+
+      if (isFriendFollowed) {
+        add({
+          id: authUser?.id || 'me',
+          name: authUser?.name || CURRENT_USER.name,
+          username: authUser?.username || CURRENT_USER.username,
+          linkupId: authUser?.linkupId || CURRENT_USER.linkupId,
+          avatar: authUser?.avatar || CURRENT_USER.avatar,
+          role: 'You',
+          status: 'online',
+          isMe: true,
+        });
+      }
+
+      INITIAL_FRIENDS.filter(
+        (f) => f.username?.toLowerCase() !== user.username?.toLowerCase()
+      ).forEach((f) => {
+        add({
+          id: f.id,
+          name: f.name,
+          username: f.username,
+          linkupId: f.linkupId,
+          avatar: f.avatar,
+          role: f.hometown ? `From ${f.hometown}` : 'Mutual Connection',
+          status: f.status || 'online',
+          isFollowing: Boolean(followedUsers[f.username?.toLowerCase()]),
+        });
+      });
+
+      return list;
+    }
+  }, [isMyProfile, friends, authUser, followedUsers, user, isFriendFollowed]);
+
+  const followingList = useMemo(() => {
+    if (isMyProfile) {
+      const list = [];
+      const seen = new Set();
+      const add = (u) => {
+        const key = u.username?.toLowerCase() || u.linkupId?.toLowerCase() || u.id;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          list.push(u);
+        }
+      };
+
+      // Friends marked isFollowing
+      friends
+        .filter((f) => f.isFollowing)
+        .forEach((f) => {
+          add({
+            id: f.id,
+            name: f.name,
+            username: f.username,
+            linkupId: f.linkupId,
+            avatar: f.avatar,
+            role: f.role || f.hometown || 'Following',
+            status: f.status || 'online',
+            isFollowing: true,
+          });
+        });
+
+      // All keys from followedUsers
+      Object.keys(followedUsers).forEach((key) => {
+        if (!followedUsers[key]) return;
+        const lowKey = key.toLowerCase();
+        if (
+          lowKey === authUser?.username?.toLowerCase() ||
+          lowKey === authUser?.linkupId?.toLowerCase()
+        ) {
+          return;
+        }
+
+        const matchedFriend =
+          friends.find(
+            (f) =>
+              f.username?.toLowerCase() === lowKey ||
+              f.linkupId?.toLowerCase() === lowKey ||
+              f.id === key
+          ) ||
+          INITIAL_FRIENDS.find(
+            (f) =>
+              f.username?.toLowerCase() === lowKey ||
+              f.linkupId?.toLowerCase() === lowKey ||
+              f.id === key
+          );
+
+        if (matchedFriend) {
+          add({
+            id: matchedFriend.id,
+            name: matchedFriend.name,
+            username: matchedFriend.username,
+            linkupId: matchedFriend.linkupId,
+            avatar: matchedFriend.avatar,
+            role: matchedFriend.role || matchedFriend.hometown || 'Following',
+            status: matchedFriend.status || 'online',
+            isFollowing: true,
+          });
+        } else {
+          let regUser = null;
+          try {
+            regUser = realtime
+              .getRegisteredUsers()
+              .find(
+                (ru) =>
+                  ru.username?.toLowerCase() === lowKey ||
+                  ru.linkupId?.toLowerCase() === lowKey
+              );
+          } catch {}
+
+          if (regUser) {
+            add({
+              id: regUser.id || `reg-${regUser.username}`,
+              name: regUser.name || regUser.username,
+              username: regUser.username,
+              linkupId: regUser.linkupId || 'LK-NET',
+              avatar:
+                regUser.avatar ||
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80',
+              role: regUser.role || 'Following',
+              status: 'online',
+              isFollowing: true,
+            });
+          } else {
+            const cleanName = key
+              .replace(/[-_.]/g, ' ')
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+            add({
+              id: `following-${key}`,
+              name: cleanName,
+              username: key,
+              linkupId: key.startsWith('lk-') ? key.toUpperCase() : 'LK-FOLLOWED',
+              avatar:
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80',
+              role: 'Following',
+              status: 'online',
+              isFollowing: true,
+            });
+          }
+        }
+      });
+
+      return list;
+    } else {
+      // Friend's profile following list
+      const list = [];
+      INITIAL_FRIENDS.filter(
+        (f) => f.username?.toLowerCase() !== user.username?.toLowerCase()
+      )
+        .slice(0, 3)
+        .forEach((f) => {
+          list.push({
+            id: f.id,
+            name: f.name,
+            username: f.username,
+            linkupId: f.linkupId,
+            avatar: f.avatar,
+            role: f.hometown ? `From ${f.hometown}` : 'Creator',
+            status: f.status || 'online',
+            isFollowing: Boolean(followedUsers[f.username?.toLowerCase()]),
+          });
+        });
+      return list;
+    }
+  }, [isMyProfile, friends, authUser, followedUsers, user]);
+
+  // 3. Dynamic Following Calculation
   const activeFollowedKeys = Object.keys(followedUsers).filter((k) => followedUsers[k]);
   const followedFriends = friends.filter((f) => f.isFollowing);
   const combinedFollowingSet = new Set([
@@ -120,17 +393,19 @@ export const ProfileView = () => {
     ...followedFriends.map((f) => f.username?.toLowerCase() || f.id),
   ]);
   const dynamicFollowingCount = isMyProfile
-    ? combinedFollowingSet.size
+    ? Math.max(combinedFollowingSet.size, followingList.length)
     : (user.followingCount ?? (user.isFollowing ? 1 : 0));
 
-  // 3. Dynamic Followers Calculation
+  // 4. Dynamic Followers Calculation
   const confirmedFriendsCount = friends.filter((f) => f.isFriend).length;
   const pendingRequestsCount = friends.filter((f) => f.hasPendingRequest).length;
   const myFollowersCount = (user.followersCount ?? 0) + confirmedFriendsCount + pendingRequestsCount;
   const friendFollowersCount = (user.followersCount ?? 0) + (isFriendFollowed ? 1 : 0);
-  const displayedFollowersCount = isMyProfile ? myFollowersCount : friendFollowersCount;
+  const displayedFollowersCount = isMyProfile
+    ? Math.max(myFollowersCount, followersList.length)
+    : friendFollowersCount;
 
-  // 4. Dynamic Gallery Images
+  // 5. Dynamic Gallery Images
   const postImages = (isMyProfile ? myPosts : friendPosts)
     .map((p) => p.image)
     .filter(Boolean);
@@ -267,19 +542,44 @@ export const ProfileView = () => {
 
           {/* 3 Stats Columns: Dynamic Posts, Followers & Following */}
           <div className="flex-1 flex items-center justify-around text-center">
-            <div className="cursor-pointer hover:opacity-80">
+            <div
+              onClick={() => {
+                setActiveTabSub('grid');
+                window.scrollTo({ top: 350, behavior: 'smooth' });
+              }}
+              className="cursor-pointer hover:opacity-80 transition-opacity p-1.5 rounded-xl hover:bg-slate-800/40"
+              title="Click to view posts"
+            >
               <span className="block text-base sm:text-lg font-black text-white">{displayedPostsCount}</span>
               <span className="text-[11px] text-slate-400 font-medium">Posts</span>
             </div>
 
-            <div className="cursor-pointer hover:opacity-80">
-              <span className="block text-base sm:text-lg font-black text-white">{displayedFollowersCount}</span>
-              <span className="text-[11px] text-slate-400 font-medium">Followers</span>
+            <div
+              onClick={() => {
+                setFollowersModalTab('followers');
+                setIsFollowersModalOpen(true);
+              }}
+              className="cursor-pointer hover:opacity-80 transition-all hover:scale-105 active:scale-95 p-1.5 rounded-xl hover:bg-purple-950/30 group"
+              title="Click to view followers list"
+            >
+              <span className="block text-base sm:text-lg font-black text-white group-hover:text-purple-300 transition-colors">
+                {displayedFollowersCount}
+              </span>
+              <span className="text-[11px] text-purple-400 font-bold group-hover:underline">Followers</span>
             </div>
 
-            <div className="cursor-pointer hover:opacity-80">
-              <span className="block text-base sm:text-lg font-black text-white">{dynamicFollowingCount}</span>
-              <span className="text-[11px] text-slate-400 font-medium">Following</span>
+            <div
+              onClick={() => {
+                setFollowersModalTab('following');
+                setIsFollowersModalOpen(true);
+              }}
+              className="cursor-pointer hover:opacity-80 transition-all hover:scale-105 active:scale-95 p-1.5 rounded-xl hover:bg-indigo-950/30 group"
+              title="Click to view following list"
+            >
+              <span className="block text-base sm:text-lg font-black text-white group-hover:text-indigo-300 transition-colors">
+                {dynamicFollowingCount}
+              </span>
+              <span className="text-[11px] text-indigo-400 font-bold group-hover:underline">Following</span>
             </div>
           </div>
         </div>
@@ -574,6 +874,62 @@ export const ProfileView = () => {
           onDeleteHighlight={handleDeleteHighlight}
         />
       )}
+
+      {/* Interactive Followers & Following Modal */}
+      <FollowersModal
+        isOpen={isFollowersModalOpen}
+        onClose={() => setIsFollowersModalOpen(false)}
+        initialTab={followersModalTab}
+        profileUser={user}
+        isMyProfile={isMyProfile}
+        followersList={followersList}
+        followingList={followingList}
+        onUserClick={(targetUser) => {
+          setIsFollowersModalOpen(false);
+          if (viewUserProfile) {
+            viewUserProfile(targetUser);
+          }
+        }}
+        onToggleFollow={(targetUser) => {
+          toggleFollowFriend(targetUser);
+          const uKey = targetUser.username?.toLowerCase() || targetUser.id;
+          const isCurrentlyFollowed = Boolean(
+            followedUsers[uKey] ||
+            followedUsers[targetUser.linkupId?.toLowerCase()] ||
+            targetUser.isFollowing
+          );
+          const nextState = !isCurrentlyFollowed;
+          const updated = {
+            ...followedUsers,
+            [uKey]: nextState,
+            [targetUser.linkupId?.toLowerCase()]: nextState,
+            [targetUser.id]: nextState,
+          };
+          setFollowedUsers(updated);
+          try {
+            localStorage.setItem('linkup_following_usernames', JSON.stringify(updated));
+          } catch {}
+        }}
+        onOpenChat={(targetUser) => {
+          setIsFollowersModalOpen(false);
+          if (openChatWithUser) {
+            openChatWithUser(targetUser);
+          }
+        }}
+        followedUsers={followedUsers}
+        onRemoveFollower={(targetUser) => {
+          if (setFriends) {
+            setFriends((prev) =>
+              prev.filter(
+                (f) =>
+                  f.username?.toLowerCase() !== targetUser.username?.toLowerCase() &&
+                  f.linkupId?.toLowerCase() !== targetUser.linkupId?.toLowerCase() &&
+                  f.id !== targetUser.id
+              )
+            );
+          }
+        }}
+      />
     </>
   );
 };

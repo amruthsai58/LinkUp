@@ -887,6 +887,7 @@ export const SocialProvider = ({ children }) => {
         setActiveScreenIndex,
         posts,
         friends,
+        setFriends,
         stories,
         reels,
         groups,

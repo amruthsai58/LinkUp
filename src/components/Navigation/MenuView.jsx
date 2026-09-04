@@ -19,13 +19,14 @@ import { CURRENT_USER } from '../../data/mockSocialData';
 import { DeleteAccountModal } from '../Settings/DeleteAccountModal';
 
 export const MenuView = () => {
-  const { setActiveTab, setIsSettingsOpen } = useSocial();
+  const { setActiveTab, setIsSettingsOpen, setViewingUser } = useSocial();
   const { user: authUser, logout } = useAuth();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const user = authUser || CURRENT_USER;
 
   const handleLogout = () => {
+    if (setViewingUser) setViewingUser(null);
     logout();
     setActiveTab('auth_welcome');
   };
@@ -39,7 +40,10 @@ export const MenuView = () => {
 
       {/* User Profile Card */}
       <div
-        onClick={() => setActiveTab('profile')}
+        onClick={() => {
+          if (setViewingUser) setViewingUser(null);
+          setActiveTab('profile');
+        }}
         className="flex items-center gap-3.5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800/80 hover:border-purple-500/50 cursor-pointer transition-all mx-2"
       >
         <img

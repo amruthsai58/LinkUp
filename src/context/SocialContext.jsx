@@ -264,9 +264,25 @@ export const SocialProvider = ({ children }) => {
   const [profileUserId, setProfileUserId] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
 
+  // When active authenticated user changes (e.g. login or logout), reset viewingUser so own profile shows
+  useEffect(() => {
+    setViewingUser(null);
+  }, [user?.id, user?.username, user?.linkupId]);
+
   const viewUserProfile = (targetUser) => {
     if (!targetUser) return;
-    setViewingUser(targetUser);
+    const isSelf = Boolean(
+      user && (
+        (targetUser.id && targetUser.id === user.id) ||
+        (targetUser.username && user.username && targetUser.username.toLowerCase() === user.username.toLowerCase()) ||
+        (targetUser.linkupId && user.linkupId && targetUser.linkupId.toLowerCase() === user.linkupId.toLowerCase())
+      )
+    );
+    if (isSelf) {
+      setViewingUser(null);
+    } else {
+      setViewingUser(targetUser);
+    }
     setActiveTab('profile');
   };
 
@@ -909,6 +925,7 @@ export const SocialProvider = ({ children }) => {
         const cloudStories = JSON.parse(localStorage.getItem('linkup_cloud_stories') || '[]');
         if (cloudStories.length > 0) {
           setStories((prev) => {
+            const existingIds = new Set((prev || []).map((st) => st?.id).filter(Boolean));
             const newOnes = cloudStories
               .filter((s) => {
                 if (!s || !s.id || existingIds.has(s.id)) return false;

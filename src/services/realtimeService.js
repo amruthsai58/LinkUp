@@ -192,17 +192,35 @@ class RealtimeService {
     // 1. Sync User Profile across all devices
     if (type === 'USER_PROFILE_SYNC' && payload && payload.username) {
       try {
+        const activeRaw = localStorage.getItem('linkup_auth_user');
+        const activeUser = activeRaw ? JSON.parse(activeRaw) : null;
+        const isCurrentActive =
+          activeUser &&
+          ((activeUser.linkupId && payload.linkupId && activeUser.linkupId.toLowerCase() === payload.linkupId.toLowerCase()) ||
+           (activeUser.username && payload.username && activeUser.username.toLowerCase() === payload.username.toLowerCase()) ||
+           (activeUser.id && payload.id && activeUser.id === payload.id));
+
         const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
         const idx = savedDb.findIndex(
           (u) =>
             (u.linkupId && payload.linkupId && u.linkupId.toLowerCase() === payload.linkupId.toLowerCase()) ||
-            u.username?.toLowerCase() === payload.username.toLowerCase()
+            (u.username && payload.username && u.username.toLowerCase() === payload.username.toLowerCase()) ||
+            (u.id && payload.id && u.id === payload.id)
         );
 
-        if (idx >= 0) {
-          savedDb[idx] = { ...savedDb[idx], ...payload };
+        if (isCurrentActive) {
+          // Keep active local user's edits, custom password and credentials safe from being downgraded by old cloud events
+          if (idx >= 0) {
+            savedDb[idx] = { ...payload, ...savedDb[idx], ...activeUser };
+          } else {
+            savedDb.unshift(activeUser);
+          }
         } else {
-          savedDb.unshift(payload);
+          if (idx >= 0) {
+            savedDb[idx] = { ...savedDb[idx], ...payload };
+          } else {
+            savedDb.unshift(payload);
+          }
         }
         localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
       } catch {}
@@ -445,17 +463,22 @@ class RealtimeService {
     this.currentUser = user;
     const cleanId = formatPeerId(user.linkupId || user.username || user.id);
 
-    // Sync user profile to global cloud relay
+    // Sync user profile to global cloud relay with complete fields
     this.publishToCloud('USER_PROFILE_SYNC', {
       id: user.id,
       name: user.name,
       username: user.username,
+      email: user.email,
       linkupId: user.linkupId,
       avatar: user.avatar,
       bio: user.bio,
       role: user.role,
+      subtitle: user.subtitle,
       work: user.work,
+      education: user.education,
       hometown: user.hometown,
+      relationshipStatus: user.relationshipStatus,
+      website: user.website,
       highlights: user.highlights,
     });
 

@@ -19,10 +19,35 @@ import { CURRENT_USER } from '../../data/mockSocialData';
 
 export const PostCard = ({ post }) => {
   const { user: authUser } = useAuth();
-  const { reactToPost, addComment, sharePost, deletePost, setActiveTab } = useSocial();
+  const { reactToPost, addComment, sharePost, deletePost, setActiveTab, setViewingUser, viewUserProfile } = useSocial();
   const { tracks, currentTrack, isPlaying, togglePlay } = useMusic();
 
   const user = authUser || CURRENT_USER;
+
+  const handleAuthorClick = () => {
+    const isSelf = Boolean(
+      authUser &&
+        ((post.author?.id && post.author.id === authUser.id) ||
+          (post.author?.username &&
+            authUser.username &&
+            post.author.username.toLowerCase() === authUser.username.toLowerCase()) ||
+          (post.author?.linkupId &&
+            authUser.linkupId &&
+            post.author.linkupId.toLowerCase() === authUser.linkupId.toLowerCase()))
+    );
+
+    if (isSelf) {
+      if (setViewingUser) setViewingUser(null);
+      setActiveTab('profile');
+    } else {
+      if (viewUserProfile) {
+        viewUserProfile(post.author);
+      } else {
+        if (setViewingUser) setViewingUser(post.author);
+        setActiveTab('profile');
+      }
+    }
+  };
 
   const [isLiked, setIsLiked] = useState(post.userReaction === 'like' || post.userReaction === 'love');
   const [likesCount, setLikesCount] = useState(post.reactions?.like || 1200);
@@ -119,7 +144,7 @@ export const PostCard = ({ post }) => {
       <div className="p-3 px-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div
-            onClick={() => setActiveTab('profile')}
+            onClick={handleAuthorClick}
             className="w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-purple-500 to-pink-500 cursor-pointer hover:scale-105 transition-transform"
           >
             <img
@@ -132,7 +157,7 @@ export const PostCard = ({ post }) => {
           <div>
             <div className="flex items-center gap-1.5">
               <h3
-                onClick={() => setActiveTab('profile')}
+                onClick={handleAuthorClick}
                 className="text-xs sm:text-sm font-bold text-white hover:text-purple-400 cursor-pointer transition-colors"
               >
                 {authorHandle}
@@ -309,7 +334,7 @@ export const PostCard = ({ post }) => {
       {post.content && (
         <div className="px-3.5 pb-2 text-xs sm:text-sm leading-snug">
           <span
-            onClick={() => setActiveTab('profile')}
+            onClick={handleAuthorClick}
             className="font-bold text-white mr-1.5 cursor-pointer hover:underline"
           >
             {authorHandle}

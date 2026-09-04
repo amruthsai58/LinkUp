@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }) => {
       const saved = localStorage.getItem('linkup_auth_user');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.username !== 'ashok.lingaraddi') {
+        if (parsed && parsed.username) {
           if (!parsed.linkupId) {
             parsed.linkupId = generateLinkUpId(parsed.username);
           }
@@ -138,7 +138,7 @@ export const AuthProvider = ({ children }) => {
     // Check registered accounts in localStorage
     const savedDb = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
     const normalizedIdentifier = normalizeEmail(cleanIdentifier);
-    const foundUser = savedDb.find(
+    let foundUser = savedDb.find(
       (u) =>
         u.username?.toLowerCase() === cleanIdentifier.toLowerCase() ||
         u.email?.toLowerCase() === cleanIdentifier.toLowerCase() ||
@@ -146,12 +146,41 @@ export const AuthProvider = ({ children }) => {
         (u.email && normalizeEmail(u.email) === normalizedIdentifier)
     );
 
+    // Fallback: check currently saved session if not yet in savedDb
+    if (!foundUser) {
+      try {
+        const activeRaw = localStorage.getItem('linkup_auth_user');
+        if (activeRaw) {
+          const parsedActive = JSON.parse(activeRaw);
+          if (
+            parsedActive.username?.toLowerCase() === cleanIdentifier.toLowerCase() ||
+            parsedActive.email?.toLowerCase() === cleanIdentifier.toLowerCase() ||
+            parsedActive.linkupId?.toLowerCase() === cleanIdentifier.toLowerCase()
+          ) {
+            foundUser = parsedActive;
+            savedDb.unshift(parsedActive);
+            localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+          }
+        }
+      } catch {}
+    }
+
     if (!foundUser) {
       throw new Error('No account found with this email/username/ID. Please create an account first.');
     }
 
     if (foundUser.password && password && foundUser.password !== password) {
       throw new Error('Incorrect password. Please try again.');
+    }
+
+    // If account was created without a password (e.g. legacy sign-in), set this password
+    if (!foundUser.password && password) {
+      foundUser.password = password;
+      const uIdx = savedDb.findIndex((u) => u.id === foundUser.id || u.username === foundUser.username);
+      if (uIdx >= 0) {
+        savedDb[uIdx].password = password;
+        localStorage.setItem('linkup_registered_users', JSON.stringify(savedDb));
+      }
     }
 
     if (!foundUser.linkupId) {
@@ -419,7 +448,8 @@ export const AuthProvider = ({ children }) => {
           if (
             (u.id && prev.id && u.id === prev.id) ||
             (u.username && prev.username && u.username.toLowerCase() === prev.username.toLowerCase()) ||
-            (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
+            (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase()) ||
+            (u.linkupId && prev.linkupId && u.linkupId.toLowerCase() === prev.linkupId.toLowerCase())
           ) {
             matched = true;
             return { ...u, ...updated };
@@ -434,6 +464,11 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {
         console.warn('Error updating registered database:', e);
       }
+
+      // Broadcast profile updates across global realtime cloud network
+      try {
+        realtime.init(updated);
+      } catch (e) {}
 
       return updated;
     });

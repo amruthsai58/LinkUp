@@ -43,7 +43,24 @@ class RealtimeService {
 
   getRegisteredUsers() {
     try {
-      return JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      const raw = JSON.parse(localStorage.getItem('linkup_registered_users') || '[]');
+      const list = [];
+      const seen = new Set();
+      raw.forEach((u) => {
+        if (!u) return;
+        const uKey = u.username ? u.username.toLowerCase() : null;
+        const lKey = u.linkupId ? u.linkupId.toLowerCase() : null;
+        const idKey = u.id ? String(u.id).toLowerCase() : null;
+
+        if ((uKey && seen.has(uKey)) || (lKey && seen.has(lKey)) || (idKey && seen.has(idKey))) {
+          return;
+        }
+        if (uKey) seen.add(uKey);
+        if (lKey) seen.add(lKey);
+        if (idKey) seen.add(idKey);
+        list.push(u);
+      });
+      return list;
     } catch {
       return [];
     }

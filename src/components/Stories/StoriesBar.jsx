@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
@@ -9,6 +9,28 @@ export const StoriesBar = () => {
   const { user: authUser } = useAuth();
 
   const user = authUser || CURRENT_USER;
+
+  const uniqueLiveStreams = useMemo(() => {
+    const map = new Map();
+    (activeLiveStreams || []).forEach((s) => {
+      const key = (s.broadcasterId || s.broadcasterUsername || s.id || '').toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, s);
+      }
+    });
+    return Array.from(map.values());
+  }, [activeLiveStreams]);
+
+  const uniqueFriendsStories = useMemo(() => {
+    const map = new Map();
+    (stories || []).slice(1).forEach((story) => {
+      const key = (story.user?.id || story.user?.username || story.id || '').toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, story);
+      }
+    });
+    return Array.from(map.values());
+  }, [stories]);
 
   return (
     <div className="w-full flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-1 select-none">
@@ -33,8 +55,7 @@ export const StoriesBar = () => {
       </div>
 
       {/* Active Live Broadcasts with Pulsing Red Rings */}
-      {activeLiveStreams &&
-        activeLiveStreams.map((stream) => (
+      {uniqueLiveStreams.map((stream) => (
           <div
             key={stream.id || stream.broadcasterId}
             onClick={() => watchLive(stream)}
@@ -65,7 +86,7 @@ export const StoriesBar = () => {
         ))}
 
       {/* Friends Stories with Gradient Rings */}
-      {stories.slice(1).map((story, idx) => {
+      {uniqueFriendsStories.map((story, idx) => {
         // gradient ring colors
         const rings = [
           'from-purple-500 via-pink-500 to-amber-500',

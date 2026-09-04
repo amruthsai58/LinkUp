@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Radio } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useMusic } from '../../context/MusicContext';
@@ -19,19 +19,27 @@ export const Feed = () => {
 
   const userHasScrolledRef = useRef(false);
 
-  // Sort posts based on feed mode
-  const sortedPosts = [...posts].sort((a, b) => {
-    if (feedMode === 'chronological') {
-      return (b.createdAt || 0) - (a.createdAt || 0);
-    }
-    const scoreA =
-      Object.values(a.reactions || {}).reduce((x, y) => x + y, 0) +
-      (a.comments?.length || 0) * 2;
-    const scoreB =
-      Object.values(b.reactions || {}).reduce((x, y) => x + y, 0) +
-      (b.comments?.length || 0) * 2;
-    return scoreB - scoreA;
-  });
+  // Deduplicate and sort posts
+  const sortedPosts = useMemo(() => {
+    const map = new Map();
+    (posts || []).forEach((p) => {
+      if (p && p.id && !map.has(p.id)) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      if (feedMode === 'chronological') {
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      }
+      const scoreA =
+        Object.values(a.reactions || {}).reduce((x, y) => x + y, 0) +
+        (a.comments?.length || 0) * 2;
+      const scoreB =
+        Object.values(b.reactions || {}).reduce((x, y) => x + y, 0) +
+        (b.comments?.length || 0) * 2;
+      return scoreB - scoreA;
+    });
+  }, [posts, feedMode]);
 
   // Only auto-play when user actively scrolls into a post (never upon initial home page load)
   useEffect(() => {

@@ -121,17 +121,24 @@ export const ProfileView = () => {
 
   // 2. Dynamic Followers & Following Lists for Modal
   const followersList = useMemo(() => {
-    if (isMyProfile) {
-      const list = [];
-      const seen = new Set();
-      const add = (u) => {
-        const key = u.username?.toLowerCase() || u.linkupId?.toLowerCase() || u.id;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          list.push(u);
-        }
-      };
+    const list = [];
+    const seen = new Set();
+    const add = (u) => {
+      if (!u) return;
+      const uKey = u.username ? u.username.toLowerCase() : null;
+      const lKey = u.linkupId ? u.linkupId.toLowerCase() : null;
+      const idKey = u.id ? String(u.id).toLowerCase() : null;
 
+      if ((uKey && seen.has(uKey)) || (lKey && seen.has(lKey)) || (idKey && seen.has(idKey))) {
+        return;
+      }
+      if (uKey) seen.add(uKey);
+      if (lKey) seen.add(lKey);
+      if (idKey) seen.add(idKey);
+      list.push(u);
+    };
+
+    if (isMyProfile) {
       // Confirmed friends and incoming requests
       friends
         .filter((f) => f.isFriend || f.hasPendingRequest)
@@ -211,16 +218,6 @@ export const ProfileView = () => {
       return list;
     } else {
       // Friend's profile followers list
-      const list = [];
-      const seen = new Set();
-      const add = (u) => {
-        const key = u.username?.toLowerCase() || u.id;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          list.push(u);
-        }
-      };
-
       if (isFriendFollowed) {
         add({
           id: authUser?.id || 'me',
@@ -254,17 +251,24 @@ export const ProfileView = () => {
   }, [isMyProfile, friends, authUser, followedUsers, user, isFriendFollowed]);
 
   const followingList = useMemo(() => {
-    if (isMyProfile) {
-      const list = [];
-      const seen = new Set();
-      const add = (u) => {
-        const key = u.username?.toLowerCase() || u.linkupId?.toLowerCase() || u.id;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          list.push(u);
-        }
-      };
+    const list = [];
+    const seen = new Set();
+    const add = (u) => {
+      if (!u) return;
+      const uKey = u.username ? u.username.toLowerCase() : null;
+      const lKey = u.linkupId ? u.linkupId.toLowerCase() : null;
+      const idKey = u.id ? String(u.id).toLowerCase() : null;
 
+      if ((uKey && seen.has(uKey)) || (lKey && seen.has(lKey)) || (idKey && seen.has(idKey))) {
+        return;
+      }
+      if (uKey) seen.add(uKey);
+      if (lKey) seen.add(lKey);
+      if (idKey) seen.add(idKey);
+      list.push(u);
+    };
+
+    if (isMyProfile) {
       // Friends marked isFollowing
       friends
         .filter((f) => f.isFollowing)
@@ -364,13 +368,12 @@ export const ProfileView = () => {
       return list;
     } else {
       // Friend's profile following list
-      const list = [];
       INITIAL_FRIENDS.filter(
         (f) => f.username?.toLowerCase() !== user.username?.toLowerCase()
       )
         .slice(0, 3)
         .forEach((f) => {
-          list.push({
+          add({
             id: f.id,
             name: f.name,
             username: f.username,
@@ -394,15 +397,21 @@ export const ProfileView = () => {
   ]);
   const dynamicFollowingCount = isMyProfile
     ? Math.max(combinedFollowingSet.size, followingList.length)
-    : (user.followingCount ?? (user.isFollowing ? 1 : 0));
+    : Math.max(user.followingCount ?? (user.isFollowing ? 1 : 0), followingList.length);
 
-  // 4. Dynamic Followers Calculation
+  // 4. Dynamic Followers Calculation (unified so both owner and viewers see the exact same count)
   const confirmedFriendsCount = friends.filter((f) => f.isFriend).length;
   const pendingRequestsCount = friends.filter((f) => f.hasPendingRequest).length;
-  const myFollowersCount = (user.followersCount ?? 0) + confirmedFriendsCount + pendingRequestsCount;
-  const friendFollowersCount = (user.followersCount ?? 0) + (isFriendFollowed ? 1 : 0);
+  const myFollowersCount = Math.max(
+    (user.followersCount ?? 0) + confirmedFriendsCount + pendingRequestsCount,
+    followersList.length
+  );
+  const friendFollowersCount = Math.max(
+    (user.followersCount ?? 0) + (isFriendFollowed ? 1 : 0),
+    followersList.length
+  );
   const displayedFollowersCount = isMyProfile
-    ? Math.max(myFollowersCount, followersList.length)
+    ? myFollowersCount
     : friendFollowersCount;
 
   // 5. Dynamic Gallery Images

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   Phone,
@@ -32,6 +32,25 @@ export const DirectChatView = () => {
   const messagesEndRef = useRef(null);
 
   const conv = activeConversation;
+
+  // Strictly deduplicate messages to ensure no duplicate message bubbles appear
+  const deduplicatedMessages = useMemo(() => {
+    if (!conv?.messages) return [];
+    return conv.messages.reduce((acc, m) => {
+      if (!m) return acc;
+      const isDuplicate = acc.some(
+        (existing) =>
+          (m.id && existing.id === m.id) ||
+          (existing.senderId === m.senderId &&
+           existing.text === m.text &&
+           Math.abs((existing.timestamp || 0) - (m.timestamp || 0)) < 4000)
+      );
+      if (!isDuplicate) {
+        acc.push(m);
+      }
+      return acc;
+    }, []);
+  }, [conv?.messages]);
 
   // Mark all unread incoming messages as seen as soon as user opens or views this chat
   useEffect(() => {
@@ -137,9 +156,9 @@ export const DirectChatView = () => {
           </span>
         </div>
 
-        {conv.messages.map((m, idx) => {
+        {deduplicatedMessages.map((m, idx) => {
           const isMe = user ? m.senderId === user.id : (m.senderId === CURRENT_USER.id || m.senderId === 'user-01');
-          const isLastMessage = idx === conv.messages.length - 1;
+          const isLastMessage = idx === deduplicatedMessages.length - 1;
 
           return (
             <div
@@ -233,7 +252,7 @@ export const DirectChatView = () => {
             </div>
           );
         })}
-        <div ref={messagesEndRef} />
+      <div ref={messagesEndRef} />
       </div>
 
       {/* Bottom Message Input Bar Matching Screenshot */}

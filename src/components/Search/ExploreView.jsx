@@ -170,26 +170,61 @@ export const ExploreView = () => {
     );
   });
 
-  // 3. Combine unique people
-  const combinedPeople = [
-    ...matchedCloud.map((u) => ({
-      id: u.id || `user-${u.username}`,
-      name: u.name || u.username,
-      username: u.username,
-      linkupId: u.linkupId || 'LK-USER',
-      avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-      bio: u.bio,
-      role: u.role,
-      work: u.work,
-      hometown: u.hometown,
-      highlights: u.highlights,
-      isRegisteredUser: true,
-      isFollowing: checkIsFollowed(u),
-    })),
-    ...matchedFriends.filter(
-      (f) => !matchedCloud.some((r) => r.username?.toLowerCase() === f.username?.toLowerCase())
-    ),
-  ];
+  // 3. Combine unique people with strict multi-key deduplication
+  const combinedPeople = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    const addPerson = (p) => {
+      if (!p) return;
+      // Do not show current logged in user in search results
+      if (
+        (authUser && p.id && p.id === authUser.id) ||
+        (authUser?.username && p.username && p.username.toLowerCase() === authUser.username.toLowerCase()) ||
+        (authUser?.linkupId && p.linkupId && p.linkupId.toLowerCase() === authUser.linkupId.toLowerCase())
+      ) {
+        return;
+      }
+
+      const uKey = p.username ? p.username.toLowerCase() : null;
+      const lKey = p.linkupId ? p.linkupId.toLowerCase() : null;
+      const idKey = p.id ? String(p.id).toLowerCase() : null;
+
+      if ((uKey && seen.has(uKey)) || (lKey && seen.has(lKey)) || (idKey && seen.has(idKey))) {
+        return;
+      }
+      if (uKey) seen.add(uKey);
+      if (lKey) seen.add(lKey);
+      if (idKey) seen.add(idKey);
+      list.push(p);
+    };
+
+    matchedCloud.forEach((u) => {
+      addPerson({
+        id: u.id || `user-${u.username}`,
+        name: u.name || u.username,
+        username: u.username,
+        linkupId: u.linkupId || 'LK-USER',
+        avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+        bio: u.bio,
+        role: u.role,
+        work: u.work,
+        hometown: u.hometown,
+        highlights: u.highlights,
+        isRegisteredUser: true,
+        isFollowing: checkIsFollowed(u),
+      });
+    });
+
+    matchedFriends.forEach((f) => {
+      addPerson({
+        ...f,
+        isFollowing: checkIsFollowed(f),
+      });
+    });
+
+    return list;
+  }, [matchedCloud, matchedFriends, authUser, followedUsers]);
 
   // Filter Posts
   const filteredPosts = posts.filter((p) => {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Camera,
   Heart,
@@ -24,7 +24,16 @@ export const ReelsView = () => {
   const { reels: contextReels, setCreateStoryOpen } = useSocial();
   const { stopAudio } = useMusic();
 
-  const allReels = contextReels && contextReels.length >= INITIAL_REELS.length ? contextReels : INITIAL_REELS;
+  const allReels = useMemo(() => {
+    const raw = contextReels && contextReels.length >= INITIAL_REELS.length ? contextReels : INITIAL_REELS;
+    const map = new Map();
+    (raw || []).forEach((r) => {
+      if (r && r.id && !map.has(r.id)) {
+        map.set(r.id, r);
+      }
+    });
+    return Array.from(map.values());
+  }, [contextReels]);
 
   const [activeReelIndex, setActiveReelIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(false);

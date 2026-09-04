@@ -171,7 +171,7 @@ export const GlobalSearchModal = () => {
   return (
     <div
       onClick={() => setIsSearchActive(false)}
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 sm:pt-16 px-3 sm:px-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 sm:pt-16 px-3 sm:px-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -179,16 +179,21 @@ export const GlobalSearchModal = () => {
       >
         {/* Search Header Bar with Auto-Focused Input */}
         <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-900/80">
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0 select-text">
             <Search className="w-5 h-5 text-purple-400 flex-shrink-0 animate-pulse" />
             <input
+              id="global-search-input"
               ref={inputRef}
               autoFocus
-              type="text"
+              type="search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onTouchStart={(e) => e.stopPropagation()}
               placeholder="Search LinkUp ID (e.g. LK-20481), name, or song..."
-              className="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-400 focus:outline-none font-medium"
+              className="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-400 focus:outline-none font-medium select-text cursor-text"
             />
           </div>
 

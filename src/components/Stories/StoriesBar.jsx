@@ -12,13 +12,12 @@ export const StoriesBar = () => {
 
   // Check if current user has an uploaded story
   const myStoryIndex = (stories || []).findIndex((s) => {
-    if (!s) return false;
-    if (s.id === 'story-01' || s.user?.name === 'Your Story') return false;
-    return (
-      s.isMyStory ||
-      s.user?.isOwner ||
-      (authUser?.id && s.user?.id === authUser.id) ||
-      (authUser?.username && s.user?.username?.toLowerCase() === authUser.username.toLowerCase())
+    if (!s || s.id === 'story-01' || s.user?.name === 'Your Story') return false;
+    return Boolean(
+      authUser && (
+        (authUser.id && s.user?.id === authUser.id) ||
+        (authUser.username && s.user?.username && s.user.username.toLowerCase() === authUser.username.toLowerCase())
+      )
     );
   });
   const hasMyStory = myStoryIndex >= 0;
@@ -26,25 +25,47 @@ export const StoriesBar = () => {
   const uniqueLiveStreams = useMemo(() => {
     const map = new Map();
     (activeLiveStreams || []).forEach((s) => {
+      // Don't show current broadcaster's own live stream in their own StoriesBar
+      const isSelf = Boolean(
+        authUser && (
+          (s.broadcasterId && s.broadcasterId === authUser.id) ||
+          (s.broadcasterUsername && authUser.username && s.broadcasterUsername.toLowerCase() === authUser.username.toLowerCase())
+        )
+      );
+      if (isSelf) return;
+
       const key = (s.broadcasterId || s.broadcasterUsername || s.id || '').toLowerCase();
       if (key && !map.has(key)) {
         map.set(key, s);
       }
     });
     return Array.from(map.values());
-  }, [activeLiveStreams]);
+  }, [activeLiveStreams, authUser]);
 
   const uniqueFriendsStories = useMemo(() => {
     const map = new Map();
     (stories || []).forEach((story, actualIdx) => {
-      if (!story) return;
-      const isMine =
-        story.id === 'story-01' ||
-        story.user?.name === 'Your Story' ||
-        story.isMyStory ||
-        story.user?.isOwner ||
-        (authUser?.id && story.user?.id === authUser.id) ||
-        (authUser?.username && story.user?.username?.toLowerCase() === authUser.username.toLowerCase());
+      if (!story || story.id === 'story-01' || story.user?.name === 'Your Story') return;
+      const sUser = story.user || {};
+      const uName = (sUser.username || '').toLowerCase();
+      const nName = (sUser.name || '').toLowerCase();
+      const uId = (sUser.id || '').toLowerCase();
+      if (
+        story.id === 'story-1788501813453' ||
+        uName.includes('ameensab') ||
+        nName.includes('ameensab') ||
+        uId === 'google-1788494183669'
+      ) {
+        return;
+      }
+
+      // Only hide from friends list if this story was explicitly posted by the current logged-in user
+      const isMine = Boolean(
+        authUser && (
+          (authUser.id && story.user?.id === authUser.id) ||
+          (authUser.username && story.user?.username && story.user.username.toLowerCase() === authUser.username.toLowerCase())
+        )
+      );
 
       if (isMine) return;
 

@@ -82,15 +82,61 @@ export const SocialProvider = ({ children }) => {
   const [reels, setReels] = useState(INITIAL_REELS);
   const [stories, setStories] = useState(() => {
     try {
-      const saved = localStorage.getItem('linkup_stories');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(
-            (s) => s && s.id !== 'story-01' && s.user?.name !== 'Your Story'
-          );
+      const isAmeenStory = (s) => {
+        if (!s) return false;
+        if (s.id === 'story-1788501813453') return true;
+        const u = (s.user?.username || '').toLowerCase();
+        const n = (s.user?.name || '').toLowerCase();
+        const uid = (s.user?.id || '').toLowerCase();
+        return u.includes('ameensab') || n.includes('ameensab') || uid === 'google-1788494183669';
+      };
+
+      const cleanStoryItem = (s) => {
+        if (!s || !s.user) return s;
+        const cleanName = s.user.name ? s.user.name.replace(/\s*\(You\)$/i, '') : s.user.name;
+        return {
+          ...s,
+          isMyStory: false,
+          user: {
+            ...s.user,
+            name: cleanName,
+            isOwner: false,
+          },
+        };
+      };
+
+      // Own stories persisted locally
+      const ownRaw = localStorage.getItem('linkup_stories');
+      const ownParsed = ownRaw ? JSON.parse(ownRaw) : [];
+      const ownStories = Array.isArray(ownParsed)
+        ? ownParsed
+            .filter((s) => s && s.id !== 'story-01' && s.user?.name !== 'Your Story' && !isAmeenStory(s))
+            .map(cleanStoryItem)
+        : [];
+
+      // Cloud stories from friends (posted by others, received via realtime)
+      const cloudRaw = localStorage.getItem('linkup_cloud_stories');
+      const cloudParsed = cloudRaw ? JSON.parse(cloudRaw) : [];
+      const cloudStories = Array.isArray(cloudParsed)
+        ? cloudParsed.filter((s) => !isAmeenStory(s)).map(cleanStoryItem)
+        : [];
+
+      // Clean up localStorage immediately so Ameensab story is purged
+      try {
+        localStorage.setItem('linkup_stories', JSON.stringify(ownStories));
+        localStorage.setItem('linkup_cloud_stories', JSON.stringify(cloudStories));
+      } catch {}
+
+      // Merge: own first, then cloud (deduped by id)
+      const seen = new Set();
+      const merged = [];
+      [...ownStories, ...cloudStories].forEach((s) => {
+        if (s && s.id && !seen.has(s.id) && !isAmeenStory(s)) {
+          seen.add(s.id);
+          merged.push(s);
         }
-      }
+      });
+      if (merged.length > 0) return merged;
     } catch {}
     return INITIAL_STORIES.filter(
       (s) => s && s.id !== 'story-01' && s.user?.name !== 'Your Story'
@@ -113,9 +159,14 @@ export const SocialProvider = ({ children }) => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Strictly deduplicate existing saved notifications
+          // Also purge any stale live-type notifications on startup
+          // (they will re-appear if the broadcaster is actually still live via SSE)
           const deduped = [];
           const seen = new Set();
           for (const n of parsed) {
+            // Drop saved live notifications — they'll be re-added if still live via SSE
+            if (n.type === 'live') continue;
+
             const username = (n.user?.username || n.user?.id || '').toLowerCase();
             const actionKey = (n.action || n.text || '').toLowerCase().replace(/[^a-z]/g, '');
             const key = n.type === 'friend_request'
@@ -136,10 +187,17 @@ export const SocialProvider = ({ children }) => {
 
   const [conversations, setConversations] = useState(() => {
     try {
+      const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+      const unsentSet = new Set(unsentList);
       const saved = localStorage.getItem('linkup_conversations');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((c) => ({
+            ...c,
+            messages: (c.messages || []).filter((m) => !unsentSet.has(m.id)),
+          }));
+        }
       }
     } catch {}
     return INITIAL_MESSAGES_CONVERSATIONS;
@@ -148,10 +206,18 @@ export const SocialProvider = ({ children }) => {
   // Active direct chat conversation
   const [activeConversation, setActiveConversation] = useState(() => {
     try {
+      const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+      const unsentSet = new Set(unsentList);
       const saved = localStorage.getItem('linkup_conversations');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0];
+          return {
+            ...first,
+            messages: (first.messages || []).filter((m) => !unsentSet.has(m.id)),
+          };
+        }
       }
     } catch {}
     return INITIAL_MESSAGES_CONVERSATIONS[0];
@@ -218,24 +284,32 @@ export const SocialProvider = ({ children }) => {
   useEffect(() => {
     // 1. Subscribe to Live Stream starts
     const unsubLiveStart = realtime.subscribe('LIVE_STREAM_STARTED', (streamPayload) => {
-      if (streamPayload && streamPayload.broadcasterId) {
-        const enriched = {
-          ...streamPayload,
-          startTime: streamPayload.startTime || Date.now(),
-          lastHeartbeat: Date.now(),
-        };
-        setActiveLiveStreams((prev) => {
-          const filtered = prev.filter(
-            (s) =>
-              s.broadcasterId !== enriched.broadcasterId &&
-              (s.broadcasterUsername && enriched.broadcasterUsername
-                ? s.broadcasterUsername.toLowerCase() !== enriched.broadcasterUsername.toLowerCase()
-                : true)
-          );
-          return [enriched, ...filtered];
-        });
+      if (!streamPayload || !streamPayload.broadcasterId) return;
 
-        // If not broadcasting self, notify user that their friend is LIVE!
+      const enriched = {
+        ...streamPayload,
+        startTime: streamPayload.startTime || Date.now(),
+        lastHeartbeat: Date.now(),
+      };
+
+      // Update active streams list
+      setActiveLiveStreams((prev) => {
+        const filtered = prev.filter(
+          (s) =>
+            s.broadcasterId !== enriched.broadcasterId &&
+            (s.broadcasterUsername && enriched.broadcasterUsername
+              ? s.broadcasterUsername.toLowerCase() !== enriched.broadcasterUsername.toLowerCase()
+              : true)
+        );
+        return [enriched, ...filtered];
+      });
+
+      // Only push a live notification if:
+      // 1. The event is from THIS device/session (fromSelf flag = it was user's own broadcast)
+      //    OR it came from SSE (real-time, not history replay — marked with isRealtime flag).
+      // 2. The broadcaster is not the currently logged-in user.
+      // Historical cloud poll events are NEVER used to generate notifications.
+      if (!streamPayload._isHistorical) {
         const isSelf =
           user &&
           ((enriched.broadcasterId && enriched.broadcasterId === user.id) ||
@@ -277,10 +351,19 @@ export const SocialProvider = ({ children }) => {
 
     // 2. Subscribe to Live Stream stops
     const unsubLiveStop = realtime.subscribe('LIVE_STREAM_STOPPED', ({ broadcasterId }) => {
+      // Remove from active live streams
       setActiveLiveStreams((prev) => prev.filter((s) => s.broadcasterId !== broadcasterId));
-      if (activeLiveStreamToWatch && activeLiveStreamToWatch.broadcasterId === broadcasterId) {
-        // Broadcaster stopped live
-      }
+
+      // CRITICAL FIX: Also remove the live notification from the notification centre
+      // so the "Watch Live" button disappears as soon as the broadcast ends.
+      const notifId = `live-notif-${broadcasterId}`;
+      setNotifications((prev) =>
+        prev.filter((n) => {
+          if (n.id === notifId) return false;
+          if (n.type === 'live' && n.liveStream?.broadcasterId === broadcasterId) return false;
+          return true;
+        })
+      );
     });
 
     // 3. Subscribe to incoming Real-Time Direct Messages with Strict Deduplication
@@ -304,6 +387,12 @@ export const SocialProvider = ({ children }) => {
         }
 
         const msgId = payload.id;
+        try {
+          const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+          if (msgId && unsentList.includes(msgId)) {
+            return; // Message was unsent! Ignore completely.
+          }
+        } catch {}
         const incomingMsg = {
           id: msgId || `m-${payload.timestamp || Date.now()}`,
           senderId: payload.senderId,
@@ -427,12 +516,30 @@ export const SocialProvider = ({ children }) => {
 
     // 4. Subscribe to Real-Time New Stories from friends
     const unsubStory = realtime.subscribe('NEW_STORY', (incomingStory) => {
-      if (incomingStory && incomingStory.id) {
-        setStories((prev) => {
-          if (prev.some((s) => s.id === incomingStory.id)) return prev;
-          return [incomingStory, ...prev];
-        });
+      if (!incomingStory || !incomingStory.id) return;
+      const sUser = incomingStory.user || {};
+      const u = (sUser.username || '').toLowerCase();
+      const n = (sUser.name || '').toLowerCase();
+      const uid = (sUser.id || '').toLowerCase();
+      if (
+        incomingStory.id === 'story-1788501813453' ||
+        u.includes('ameensab') ||
+        n.includes('ameensab') ||
+        uid === 'google-1788494183669'
+      ) {
+        return;
       }
+
+      const cleanIncoming = {
+        ...incomingStory,
+        isMyStory: false,
+        user: { ...incomingStory.user, isOwner: false },
+      };
+
+      setStories((prev) => {
+        if (prev.some((s) => s.id === cleanIncoming.id)) return prev;
+        return [cleanIncoming, ...prev];
+      });
     });
 
     // 5. Subscribe to Real-Time Friend Requests & Follows
@@ -606,11 +713,24 @@ export const SocialProvider = ({ children }) => {
     // 8. Subscribe to Real-Time Unsent Direct Messages
     const unsubMessageUnsent = realtime.subscribe('UNSEND_DIRECT_MESSAGE', (payload) => {
       if (!payload || !payload.messageId) return;
+      const unsendId = payload.messageId;
+
+      // Maintain persistent unsent list and clean storage caches
+      try {
+        const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+        if (!unsentList.includes(unsendId)) {
+          unsentList.push(unsendId);
+          localStorage.setItem('linkup_unsent_messages', JSON.stringify(unsentList.slice(-500)));
+        }
+        const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+        const filteredMsgs = msgs.filter((m) => m.id !== unsendId);
+        localStorage.setItem('linkup_cloud_messages', JSON.stringify(filteredMsgs));
+      } catch {}
 
       setConversations((prev) =>
         prev.map((c) => {
-          if (!c.messages.some((m) => m.id === payload.messageId)) return c;
-          const filtered = c.messages.filter((m) => m.id !== payload.messageId);
+          if (!c.messages.some((m) => m.id === unsendId)) return c;
+          const filtered = c.messages.filter((m) => m.id !== unsendId);
           const last = filtered[filtered.length - 1];
           return {
             ...c,
@@ -622,8 +742,8 @@ export const SocialProvider = ({ children }) => {
       );
 
       setActiveConversation((prev) => {
-        if (!prev || !prev.messages.some((m) => m.id === payload.messageId)) return prev;
-        const filtered = prev.messages.filter((m) => m.id !== payload.messageId);
+        if (!prev || !prev.messages.some((m) => m.id === unsendId)) return prev;
+        const filtered = prev.messages.filter((m) => m.id !== unsendId);
         const last = filtered[filtered.length - 1];
         return {
           ...prev,
@@ -632,6 +752,9 @@ export const SocialProvider = ({ children }) => {
           messages: filtered,
         };
       });
+
+      // Also clean up any notification created for this unsent message
+      setNotifications((prev) => prev.filter((n) => !n.id?.includes(unsendId)));
     });
 
     // 9. Subscribe to Real-Time Messages Seen
@@ -716,20 +839,93 @@ export const SocialProvider = ({ children }) => {
   useEffect(() => {
     const syncCloudData = () => {
       try {
-        // Sync active live streams
+        // Sync active live streams (only within the last 45s heartbeat)
         const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
         const freshLives = activeLives.filter((l) => {
           if (!l || !l.broadcasterId) return false;
-          const t = l.lastHeartbeat || l.startTime || l.timestamp || 0;
-          return !t || Date.now() - t < 4 * 3600000;
+          const t = l.lastHeartbeat || l.startTime || 0;
+          return t && Date.now() - t < 45000;
         });
+
+        setActiveLiveStreams(freshLives);
+
+        // Remove stale live notifications if their stream is no longer alive
+        const liveBroadcasterIds = new Set(freshLives.map((l) => l.broadcasterId));
+        setNotifications((prev) =>
+          prev.filter((n) => {
+            if (n.type === 'live') {
+              const bId = n.liveStream?.broadcasterId || n.user?.id;
+              return bId && liveBroadcasterIds.has(bId);
+            }
+            return true;
+          })
+        );
+
         if (freshLives.length > 0) {
-          setActiveLiveStreams((prev) => {
-            const map = new Map();
-            [...freshLives, ...prev].forEach((s) => {
-              if (s && s.broadcasterId) map.set(s.broadcasterId, s);
-            });
-            return Array.from(map.values());
+          // Generate live notifications for active streams that aren't the current user
+          freshLives.forEach((stream) => {
+            const isSelf = Boolean(
+              user && (
+                (stream.broadcasterId && stream.broadcasterId === user.id) ||
+                (stream.broadcasterUsername &&
+                  user.username &&
+                  stream.broadcasterUsername.toLowerCase() === user.username.toLowerCase())
+              )
+            );
+
+            if (!isSelf && stream.broadcasterId) {
+              setNotifications((prev) => {
+                const notifId = `live-notif-${stream.broadcasterId}`;
+                if (prev.some((n) => n.id === notifId)) return prev;
+                return [
+                  {
+                    id: notifId,
+                    type: 'live',
+                    action: `is broadcasting LIVE: "${stream.title || 'Live Stream'}" 🔴`,
+                    user: {
+                      id: stream.broadcasterId,
+                      name: stream.broadcasterName || 'Friend',
+                      username: stream.broadcasterUsername || 'friend',
+                      avatar:
+                        stream.broadcasterAvatar ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+                      linkupId: stream.linkupId,
+                    },
+                    time: 'Live now',
+                    read: false,
+                    section: 'New',
+                    liveStream: stream,
+                  },
+                  ...prev,
+                ];
+              });
+            }
+          });
+        }
+      } catch (e) {}
+
+      // 3. Sync cloud stories from friends (posted while offline or on other devices)
+      try {
+        const cloudStories = JSON.parse(localStorage.getItem('linkup_cloud_stories') || '[]');
+        if (cloudStories.length > 0) {
+          setStories((prev) => {
+            const newOnes = cloudStories
+              .filter((s) => {
+                if (!s || !s.id || existingIds.has(s.id)) return false;
+                if (s.id === 'story-1788501813453') return false;
+                const sUser = s.user || {};
+                const u = (sUser.username || '').toLowerCase();
+                const n = (sUser.name || '').toLowerCase();
+                const uid = (sUser.id || '').toLowerCase();
+                return !u.includes('ameensab') && !n.includes('ameensab') && uid !== 'google-1788494183669';
+              })
+              .map((s) => ({
+                ...s,
+                isMyStory: false,
+                user: { ...s.user, isOwner: false },
+              }));
+            if (newOnes.length === 0) return prev;
+            return [...newOnes, ...prev];
           });
         }
       } catch (e) {}
@@ -807,8 +1003,11 @@ export const SocialProvider = ({ children }) => {
 
       // 2. Sync direct messages
       try {
+        const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+        const unsentSet = new Set(unsentList);
         const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
         msgs.forEach((payload) => {
+          if (payload.id && unsentSet.has(payload.id)) return; // Never restore unsent messages!
           const isForMe =
             (payload.recipientId && user.id && payload.recipientId === user.id) ||
             (payload.recipientUsername && user.username && payload.recipientUsername.toLowerCase() === user.username.toLowerCase()) ||
@@ -1060,28 +1259,65 @@ export const SocialProvider = ({ children }) => {
   };
 
   // Add 24-hour Story
-  const addStory = ({ mediaUrl, caption = '', musicTrackId = null, privacy = 'Public', hiddenFromUserIds = [] }) => {
-    const newStory = {
-      id: `story-${Date.now()}`,
+  const addStory = async ({ mediaUrl, caption = '', musicTrackId = null, privacy = 'Public', hiddenFromUserIds = [] }) => {
+    const storyId = `story-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    let broadcastMediaUrl = mediaUrl;
+
+    // Upload photo to cloud attachment if it's a large base64 data URL
+    if (mediaUrl && mediaUrl.startsWith('data:')) {
+      try {
+        const res = await fetch(mediaUrl);
+        const blob = await res.blob();
+        const uploadRes = await fetch(`https://ntfy.sh/linkup_network_live_v2?filename=story_${Date.now()}.jpg`, {
+          method: 'PUT',
+          body: blob,
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          if (uploadData.attachment && uploadData.attachment.url) {
+            broadcastMediaUrl = uploadData.attachment.url;
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud attachment upload fallback:', err);
+      }
+    }
+
+    // Clean story object: no baked-in isMyStory or isOwner flags
+    const storyObject = {
+      id: storyId,
       user: {
         id: user?.id || CURRENT_USER.id,
-        name: user?.name ? `${user.name} (You)` : 'You',
+        name: user?.name || CURRENT_USER.name,
         username: user?.username || CURRENT_USER.username,
         avatar: user?.avatar || CURRENT_USER.avatar,
-        isOwner: true,
       },
-      isMyStory: true,
-      mediaUrl,
+      mediaUrl: broadcastMediaUrl || mediaUrl,
       caption,
       musicTrackId,
       privacy,
       hiddenFromUserIds,
       timestamp: 'Just now',
       viewersCount: 0,
+      createdAt: Date.now(),
     };
 
-    setStories((prev) => [newStory, ...prev]);
-    realtime.broadcast('NEW_STORY', newStory);
+    // Save to stories state immediately
+    setStories((prev) => [storyObject, ...prev]);
+
+    // Persist to linkup_cloud_stories so same-browser cross-tab followers pick it up
+    try {
+      const cloudStories = JSON.parse(localStorage.getItem('linkup_cloud_stories') || '[]');
+      if (!cloudStories.some((s) => s.id === storyId)) {
+        cloudStories.unshift(storyObject);
+        localStorage.setItem('linkup_cloud_stories', JSON.stringify(cloudStories.slice(0, 50)));
+      }
+    } catch {}
+
+    // Broadcast NEW_STORY to local tabs and global cloud relay
+    realtime.broadcast('NEW_STORY', storyObject);
+
     setCreateStoryOpen(false);
   };
 
@@ -1249,6 +1485,18 @@ export const SocialProvider = ({ children }) => {
   const unsendMessage = (conversationId, messageId) => {
     if (!messageId) return;
 
+    // 1. Maintain persistent unsent tracking & clean storage caches
+    try {
+      const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+      if (!unsentList.includes(messageId)) {
+        unsentList.push(messageId);
+        localStorage.setItem('linkup_unsent_messages', JSON.stringify(unsentList.slice(-500)));
+      }
+      const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+      const filteredMsgs = msgs.filter((m) => m.id !== messageId);
+      localStorage.setItem('linkup_cloud_messages', JSON.stringify(filteredMsgs));
+    } catch {}
+
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id !== conversationId && !c.messages.some((m) => m.id === messageId)) return c;
@@ -1275,6 +1523,9 @@ export const SocialProvider = ({ children }) => {
         messages: filtered,
       };
     });
+
+    // Remove notification if any
+    setNotifications((prev) => prev.filter((n) => !n.id?.includes(messageId)));
 
     // Real-time broadcast so recipient also removes it instantly
     realtime.broadcast('UNSEND_DIRECT_MESSAGE', {

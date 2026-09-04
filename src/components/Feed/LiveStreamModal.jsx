@@ -34,6 +34,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [notifiedFollowers, setNotifiedFollowers] = useState(false);
 
   const [chatMessages, setChatMessages] = useState([
     { id: 1, user: 'System', text: 'Welcome to your live room! Friends can join anytime 🔴' },
@@ -43,29 +44,48 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const startTimeRef = useRef(Date.now());
+  const [cameraError, setCameraError] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
 
-  // Request actual camera or simulated stream
+  // ─── Request camera + mic on open ────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) {
       setIsMinimized(false);
       setShowExitConfirm(false);
+      setCameraReady(false);
+      setCameraError(false);
+      setIsLive(false);
+      // Stop all tracks to release camera hardware
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (typeof window !== 'undefined') {
+        window.__linkup_live_stream__ = null;
+      }
       return;
     }
 
     const startCamera = async () => {
       try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+            audio: { echoCancellation: true, noiseSuppression: true },
           });
           streamRef.current = stream;
+          setCameraReady(true);
+          setCameraError(false);
+          // Attach to video element (may already be mounted)
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
           }
+        } else {
+          setCameraError(true);
         }
       } catch (err) {
-        console.log('Using simulated camera broadcast feed', err);
+        console.warn('Camera/mic permission denied or unavailable:', err);
+        setCameraError(true);
       }
     };
 
@@ -73,17 +93,42 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
 
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (typeof window !== 'undefined') {
+        window.__linkup_live_stream__ = null;
       }
     };
   }, [isOpen]);
 
-  // Re-attach video stream when minimizing/expanding
+  // ─── Re-attach stream whenever videoRef is available or minimized/expanded ─
   useEffect(() => {
     if (isOpen && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
     }
-  }, [isOpen, isMinimized]);
+  }, [isOpen, isMinimized, cameraReady]);
+
+  // ─── Camera track toggle ──────────────────────────────────────────────────
+  const handleToggleCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach((t) => {
+        t.enabled = !t.enabled;
+      });
+    }
+    setIsCameraOn((prev) => !prev);
+  };
+
+  // ─── Mic track toggle ─────────────────────────────────────────────────────
+  const handleToggleMic = () => {
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach((t) => {
+        t.enabled = !t.enabled;
+      });
+    }
+    setIsMicOn((prev) => !prev);
+  };
 
   // Start / Stop broadcast and listen to real-time viewer interactions
   useEffect(() => {
@@ -208,6 +253,26 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleNotifyFollowers = () => {
+    const liveParam = activeUser.linkupId || activeUser.username || activeUser.id;
+    const url = `${window.location.origin}${window.location.pathname}?live=${encodeURIComponent(liveParam)}`;
+    // Broadcast a shareable notification via BroadcastChannel so all open tabs/windows see it
+    try {
+      const shareData = {
+        title: `📢 ${activeUser.name} is LIVE on LinkUp!`,
+        text: `${activeUser.name} (@${activeUser.username}) just started a live: "${streamTitle}" — join now!`,
+        url,
+      };
+      if (navigator.share) {
+        navigator.share(shareData).catch(() => {});
+      } else {
+        navigator.clipboard?.writeText(url).catch(() => {});
+      }
+    } catch {}
+    setNotifiedFollowers(true);
+    setTimeout(() => setNotifiedFollowers(false), 4000);
+  };
+
   const handleCloseAttempt = () => {
     if (isLive) {
       setShowExitConfirm(true);
@@ -278,7 +343,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 sm:bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200 select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 sm:bg-black/90 backdrop-blur-2xl animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg h-full sm:h-[92dvh] sm:max-h-[820px] bg-[#070A12] border-0 sm:border border-slate-800 rounded-none sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         {/* Top Floating Header */}
         <div className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between">
@@ -345,16 +410,17 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
 
         {/* Video Stage Area */}
         <div className="relative flex-1 bg-slate-950 flex items-center justify-center overflow-hidden">
-          {isCameraOn ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover transform scale-x-[-1]"
-              poster="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80"
-            />
-          ) : (
+          {/* Always keep video mounted so srcObject is never lost */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity duration-300 ${isCameraOn && cameraReady ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
+          />
+
+          {/* Camera off placeholder */}
+          {!isCameraOn && (
             <div className="flex flex-col items-center gap-3 text-slate-400">
               <div className="w-24 h-24 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-slate-500">
                 <VideoOff className="w-10 h-10" />
@@ -362,6 +428,30 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
               <span className="text-xs font-bold">Camera is Off</span>
             </div>
           )}
+
+          {/* Camera permission denied */}
+          {cameraError && isCameraOn && (
+            <div className="flex flex-col items-center gap-3 text-slate-400 p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-red-900/30 border-2 border-red-700/40 flex items-center justify-center text-red-400">
+                <VideoOff className="w-9 h-9" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Camera Access Denied</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">Allow camera &amp; microphone access in your browser settings, then refresh to enable video.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting for camera */}
+          {!cameraError && !cameraReady && isCameraOn && (
+            <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center animate-pulse">
+                <Video className="w-7 h-7 text-purple-400" />
+              </div>
+              <span className="text-xs font-bold text-slate-300">Starting camera…</span>
+            </div>
+          )}
+
 
           {/* Floating animated hearts */}
           {floatingHearts.map((h) => (
@@ -378,7 +468,25 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
           <div className="absolute top-16 inset-x-4 z-20">
             {isLive ? (
               <div className="p-2.5 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-white">
-                <h4 className="text-xs font-bold leading-snug">{streamTitle}</h4>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h4 className="text-xs font-bold leading-snug">{streamTitle}</h4>
+                  <button
+                    type="button"
+                    onClick={handleNotifyFollowers}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all border ${
+                      notifiedFollowers
+                        ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
+                        : 'bg-white/10 border-white/20 text-white hover:bg-purple-600/40 hover:border-purple-400'
+                    }`}
+                    title="Share live link with followers"
+                  >
+                    {notifiedFollowers ? (
+                      <><Check className="w-3 h-3" /><span>Notified!</span></>
+                    ) : (
+                      <><Share2 className="w-3 h-3 text-purple-400" /><span>Notify Followers</span></>
+                    )}
+                  </button>
+                </div>
                 <p className="text-[10px] text-slate-400 mt-0.5">
                   Host: {activeUser.name} (@{activeUser.username}) • {activeUser.linkupId}
                 </p>
@@ -495,7 +603,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
               {/* Camera Toggle */}
               <button
                 type="button"
-                onClick={() => setIsCameraOn(!isCameraOn)}
+                onClick={handleToggleCamera}
                 className={`p-2.5 rounded-xl border transition-colors ${
                   isCameraOn
                     ? 'bg-slate-900 border-slate-800 text-slate-200'
@@ -509,7 +617,7 @@ export const LiveStreamModal = ({ isOpen, onClose }) => {
               {/* Mic Toggle */}
               <button
                 type="button"
-                onClick={() => setIsMicOn(!isMicOn)}
+                onClick={handleToggleMic}
                 className={`p-2.5 rounded-xl border transition-colors ${
                   isMicOn
                     ? 'bg-slate-900 border-slate-800 text-slate-200'

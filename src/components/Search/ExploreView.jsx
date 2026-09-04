@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Search,
   Users,
@@ -7,6 +7,7 @@ import {
   Sparkles,
   Heart,
   Play,
+  Pause,
   Grid,
   TrendingUp,
   ChevronRight,
@@ -16,9 +17,12 @@ import {
   Check,
   Copy,
   Radio,
+  Music,
+  Volume2,
 } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
+import { useMusic } from '../../context/MusicContext';
 import { PostCard } from '../Feed/PostCard';
 import { realtime } from '../../services/realtimeService';
 
@@ -37,17 +41,42 @@ export const ExploreView = () => {
     setActiveTab,
     openChatWithUser,
     viewUserProfile,
+    searchQuery,
+    setSearchQuery,
   } = useSocial();
   const { searchRegisteredUsers, user: authUser } = useAuth();
+  const { tracks, togglePlay, currentTrack, isPlaying } = useMusic();
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => searchQuery || '');
   const [selectedTag, setSelectedTag] = useState(null);
   const [syncTick, setSyncTick] = useState(0);
-  const [cloudUsers, setCloudUsers] = useState(() => realtime.getRegisteredUsers());
+  const [cloudUsers, setCloudUsers] = useState(() => realtime.getRegisteredUsers() || []);
   const exploreInputRef = useRef(null);
 
+  // Keep in sync with context searchQuery
   useEffect(() => {
-    exploreInputRef.current?.focus();
+    if (searchQuery !== undefined && searchQuery !== query) {
+      setQuery(searchQuery || '');
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      exploreInputRef.current?.focus();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Keyboard shortcut '/' to immediately focus the search input
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        exploreInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Persistent following state
@@ -125,7 +154,7 @@ export const ExploreView = () => {
     }
   }, [query]);
 
-  const CATEGORIES = ['All', 'People', 'Posts', 'Reels', 'Tags'];
+  const CATEGORIES = ['All', 'People', 'Songs', 'Posts', 'Reels', 'Tags'];
 
   const TRENDING_TAGS = [
     { tag: '#DSA', keyword: 'dsa', postsCount: '24.5K', category: 'Technology' },
@@ -144,7 +173,7 @@ export const ExploreView = () => {
   const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // 1. Search registered accounts across local network & global cloud sync
-  const matchedCloud = cloudUsers.filter((u) => {
+  const matchedCloud = (cloudUsers || []).filter((u) => {
     if (!cleanQuery) return true;
     const uName = normalize(u.name);
     const uUser = normalize(u.username);
@@ -160,7 +189,7 @@ export const ExploreView = () => {
   });
 
   // 2. Search friends list with flexible normalization
-  const matchedFriends = friends.filter((f) => {
+  const matchedFriends = (friends || []).filter((f) => {
     if (!cleanQuery) return true;
     const fName = normalize(f.name);
     const fUser = normalize(f.username);
@@ -174,6 +203,27 @@ export const ExploreView = () => {
       (!cleanNorm.startsWith('lk') && fId.includes(`lk${cleanNorm}`))
     );
   });
+
+  // 3. Search regional songs (105 tracks)
+  const matchedSongs = useMemo(() => {
+    const songList = tracks || [];
+    if (!cleanNorm) return songList.slice(0, 10);
+    return songList.filter((t) => {
+      const title = normalize(t.title);
+      const movie = normalize(t.movie);
+      const singers = normalize(t.singers);
+      const director = normalize(t.musicDirector);
+      const lang = normalize(t.language);
+
+      return (
+        title.includes(cleanNorm) ||
+        movie.includes(cleanNorm) ||
+        singers.includes(cleanNorm) ||
+        director.includes(cleanNorm) ||
+        lang.includes(cleanNorm)
+      );
+    });
+  }, [tracks, cleanNorm]);
 
   // 3. Combine unique people with strict multi-key deduplication
   const combinedPeople = useMemo(() => {
@@ -281,53 +331,56 @@ export const ExploreView = () => {
   };
 
   return (
-    <div className="w-full flex flex-col gap-4 pb-20 select-none text-slate-100 animate-in fade-in duration-200">
-      {/* Top Dedicated "Connect & Follow by LinkUp ID" Card */}
-      <div className="mx-2 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/80 via-indigo-950/60 to-slate-900 border border-purple-500/50 shadow-xl flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-md">
-              ID
-            </div>
-            <div>
-              <h3 className="text-xs font-black text-white flex items-center gap-1.5">
-                <span>Enter Friend's LinkUp ID</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              </h3>
-              <p className="text-[10px] text-slate-300">
-                Type or paste ID (e.g. <span className="text-purple-300 font-mono font-bold">LK-20481</span>) to find, follow & text
-              </p>
-            </div>
-          </div>
-          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold">
-            Real-time
-          </span>
+    <div className="w-full flex flex-col gap-4 pb-24 text-slate-100 animate-in fade-in duration-200">
+      {/* Primary Universal Search Bar */}
+      <div className="sticky top-0 z-30 bg-[#06080F]/95 backdrop-blur-xl pt-2 pb-3 px-2 flex flex-col gap-2.5 border-b border-slate-800/80">
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 w-5 h-5 text-purple-400 pointer-events-none" />
+          <input
+            id="main-explore-search-input"
+            ref={exploreInputRef}
+            type="search"
+            autoFocus
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck="false"
+            value={query}
+            onChange={(e) => {
+              const val = e.target.value;
+              setQuery(val);
+              if (setSearchQuery) setSearchQuery(val);
+              if (selectedTag && !val) setSelectedTag(null);
+            }}
+            placeholder="Search LinkUp ID (e.g. LK-20481), name, songs, posts..."
+            className="w-full pl-11 pr-10 py-3 bg-slate-900/95 border-2 border-purple-500/50 hover:border-purple-400 focus:border-purple-400 rounded-2xl text-sm font-medium text-white placeholder-slate-400 focus:outline-none shadow-lg shadow-purple-950/30 transition-all select-text cursor-text"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={handleClearTagFilter}
+              className="absolute right-3 p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 transition-colors"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
-            <input
-              ref={exploreInputRef}
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                if (selectedTag && !e.target.value) setSelectedTag(null);
-              }}
-              placeholder="Paste or type LinkUp ID (e.g. LK-20481 or 20481)..."
-              className="w-full pl-9 pr-8 py-2.5 bg-slate-900/90 border border-purple-500/40 rounded-xl text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 shadow-inner"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={handleClearTagFilter}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+        {/* Quick LinkUp ID suggestion pill bar */}
+        <div className="flex items-center justify-between text-[11px] px-1 text-slate-400">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Connect instantly via <span className="text-purple-300 font-mono font-bold">LinkUp ID</span>, username, or song title</span>
           </div>
+          {cleanQuery && (
+            <button
+              type="button"
+              onClick={handleClearTagFilter}
+              className="text-purple-400 hover:text-purple-300 font-bold"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -343,7 +396,7 @@ export const ExploreView = () => {
             }}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               searchCategory === cat
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30'
                 : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
             }`}
           >
@@ -510,6 +563,94 @@ export const ExploreView = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* SONGS SECTION */}
+      {(searchCategory === 'All' || searchCategory === 'Songs' || (!cleanQuery && searchCategory === 'Songs') || (searchCategory === 'All' && cleanQuery && matchedSongs.length > 0)) && (
+        <div className="flex flex-col gap-2.5 px-2 pt-1 border-t border-slate-800/80">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+              <Music className="w-4 h-4 text-emerald-400" />
+              <span>{query ? 'Matched Songs & Audio' : 'Popular Regional Songs (105 Tracks)'}</span>
+            </h3>
+            <span className="text-xs font-semibold text-emerald-300">
+              {matchedSongs.length} {matchedSongs.length === 1 ? 'track' : 'tracks'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {matchedSongs.slice(0, searchCategory === 'All' && !query ? 6 : 40).map((song) => {
+              const isThisSongPlaying = isPlaying && currentTrack?.id === song.id;
+              return (
+                <div
+                  key={song.id}
+                  className={`flex items-center justify-between p-2.5 rounded-2xl border transition-all gap-2.5 ${
+                    isThisSongPlaying
+                      ? 'bg-gradient-to-r from-emerald-950/60 via-slate-900 to-purple-950/40 border-emerald-500/60 shadow-lg'
+                      : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 shadow-md">
+                      <img
+                        src={song.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&q=80'}
+                        alt={song.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePlay(song)}
+                        className="absolute inset-0 bg-black/40 hover:bg-black/20 flex items-center justify-center text-white transition-colors"
+                        title={isThisSongPlaying ? 'Pause song' : 'Play song'}
+                      >
+                        {isThisSongPlaying ? (
+                          <Pause className="w-4 h-4 fill-emerald-400 text-emerald-400 animate-pulse" />
+                        ) : (
+                          <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h4 className={`text-xs font-bold truncate ${isThisSongPlaying ? 'text-emerald-300' : 'text-white'}`}>
+                        {song.title}
+                      </h4>
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate mt-0.5">
+                        <span className="truncate">{song.movie || song.musicDirector || 'Original'}</span>
+                        <span>•</span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[9px] font-semibold text-purple-300">
+                          {song.language || 'Music'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => togglePlay(song)}
+                    className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                      isThisSongPlaying
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
+                        : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {isThisSongPlaying ? (
+                      <Volume2 className="w-3.5 h-3.5 animate-bounce text-emerald-400" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5 fill-current text-white" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {matchedSongs.length === 0 && searchCategory === 'Songs' && (
+            <div className="p-6 text-center text-slate-400 text-xs bg-slate-900/40 rounded-2xl border border-slate-800/60">
+              No songs found matching "{query}". Try Kannada, Telugu, Tamil, Hindi, or movie title.
+            </div>
+          )}
         </div>
       )}
 

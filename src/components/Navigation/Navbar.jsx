@@ -28,12 +28,15 @@ export const Navbar = () => {
           <Logo size="md" showTagline={false} />
         </div>
 
-        {/* Center: Search Bar trigger */}
+        {/* Center: Search Bar trigger → goes directly to Explore/Search tab */}
         <button
           type="button"
-          onClick={() => setIsSearchActive(true)}
+          onClick={() => {
+            setActiveTab('search');
+            setIsSearchActive(false);
+          }}
           className="flex-1 max-w-[170px] xs:max-w-[220px] sm:max-w-[260px] mx-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-purple-950/40 border border-slate-700/80 hover:border-purple-500/50 text-slate-400 hover:text-slate-200 text-xs font-medium flex items-center justify-between gap-1.5 transition-all shadow-inner group cursor-pointer"
-          title="Open Search Bar (Enter LinkUp ID, Name, Song)"
+          title="Open Search (Enter LinkUp ID, Name, Song)"
         >
           <div className="flex items-center gap-2 min-w-0 truncate">
             <Search className="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0" />

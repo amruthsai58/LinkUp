@@ -33,11 +33,17 @@ export const DirectChatView = () => {
 
   const conv = activeConversation;
 
-  // Strictly deduplicate messages to ensure no duplicate message bubbles appear
+  // Strictly deduplicate and filter out unsent messages so they never appear
   const deduplicatedMessages = useMemo(() => {
     if (!conv?.messages) return [];
+    let unsentSet = new Set();
+    try {
+      const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+      unsentSet = new Set(unsentList);
+    } catch {}
+
     return conv.messages.reduce((acc, m) => {
-      if (!m) return acc;
+      if (!m || (m.id && unsentSet.has(m.id))) return acc;
       const isDuplicate = acc.some(
         (existing) =>
           (m.id && existing.id === m.id) ||

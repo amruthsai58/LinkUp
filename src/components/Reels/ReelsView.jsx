@@ -43,6 +43,7 @@ export const ReelsView = () => {
   const [newComment, setNewComment] = useState('');
   const [commentsList, setCommentsList] = useState([]);
   const [touchStartY, setTouchStartY] = useState(0);
+  const [sharedState, setSharedState] = useState({});
 
   const videoRef = useRef(null);
   const currentReel = allReels[activeReelIndex] || allReels[0];
@@ -128,6 +129,38 @@ export const ReelsView = () => {
   };
 
   const isLiked = likesState[activeReelIndex] ?? currentReel?.isLiked ?? false;
+
+  const handleShareReel = async (e) => {
+    e.stopPropagation();
+    const reelUrl = currentReel?.videoUrl
+      ? `${window.location.origin}${window.location.pathname}?reel=${encodeURIComponent(currentReel.id || 'latest')}`
+      : window.location.href;
+    const shareData = {
+      title: `Watch this Reel on LinkUp by @${currentReel?.creator?.username || 'linkup'}`,
+      text: currentReel?.caption || 'Check out this reel on LinkUp! 🎬',
+      url: reelUrl,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(reelUrl);
+        setSharedState((prev) => ({ ...prev, [activeReelIndex]: true }));
+        setTimeout(() => setSharedState((prev) => ({ ...prev, [activeReelIndex]: false })), 2500);
+      }
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = reelUrl;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setSharedState((prev) => ({ ...prev, [activeReelIndex]: true }));
+        setTimeout(() => setSharedState((prev) => ({ ...prev, [activeReelIndex]: false })), 2500);
+      } catch {}
+    }
+  };
 
   return (
     <div
@@ -258,16 +291,20 @@ export const ReelsView = () => {
         {/* Share */}
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            alert('Reel link copied!');
-          }}
+          onClick={handleShareReel}
           className="flex flex-col items-center gap-1 group"
+          title="Share Reel with followers"
         >
-          <div className="p-2.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md transition-transform group-hover:scale-110">
-            <Share2 className="w-6 h-6 text-white" />
+          <div className={`p-2.5 rounded-full backdrop-blur-md transition-transform group-hover:scale-110 ${
+            sharedState[activeReelIndex]
+              ? 'bg-emerald-500/30 border border-emerald-400/60'
+              : 'bg-black/40 hover:bg-black/60'
+          }`}>
+            <Share2 className={`w-6 h-6 ${ sharedState[activeReelIndex] ? 'text-emerald-400' : 'text-white' }`} />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{currentReel.sharesCount}</span>
+          <span className="text-[11px] font-bold drop-shadow">
+            {sharedState[activeReelIndex] ? 'Copied!' : currentReel.sharesCount}
+          </span>
         </button>
 
         {/* Spinning Vinyl Audio Disc */}

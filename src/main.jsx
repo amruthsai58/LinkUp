@@ -24,6 +24,14 @@ class ErrorBoundary extends React.Component {
     window.location.reload();
   };
 
+  handleResetAndReload = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = window.location.pathname;
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -35,13 +43,27 @@ class ErrorBoundary extends React.Component {
           <p className="text-xs text-slate-400 max-w-sm mb-6">
             LinkUp encountered an unexpected error. Tap below to reload the app cleanly.
           </p>
-          <button
-            type="button"
-            onClick={this.handleReload}
-            className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 active:scale-95 transition-all"
-          >
-            Reload LinkUp
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 active:scale-95 transition-all"
+            >
+              Reload LinkUp
+            </button>
+            <button
+              type="button"
+              onClick={this.handleResetAndReload}
+              className="px-5 py-2.5 rounded-2xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs active:scale-95 transition-all"
+            >
+              Clear Cache & Reset
+            </button>
+          </div>
+          {this.state.error && (
+            <pre className="mt-4 p-3 bg-black/50 border border-red-500/20 text-red-400 text-[10px] rounded-xl max-w-md overflow-x-auto text-left">
+              {this.state.error?.message || String(this.state.error)}
+            </pre>
+          )}
         </div>
       );
     }

@@ -19,17 +19,53 @@ class RealtimeService {
     this.activeCalls = new Map();
     this.localStream = null;
     this.isInitialized = false;
-    this.eventSource = null;
     this.processedMessageIds = new Set();
+
+    // Purge any stale active live streams on startup
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('linkup_active_live_streams');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const alive = (parsed || []).filter(
+            (s) => s && s.lastHeartbeat && Date.now() - s.lastHeartbeat < 45000
+          );
+          localStorage.setItem('linkup_active_live_streams', JSON.stringify(alive));
+        }
+      }
+    } catch {}
 
     // 1. Cross-tab / Cross-window broadcast channel for local multi-user testing
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       this.channel = new BroadcastChannel('linkup_realtime_network');
       this.channel.onmessage = (event) => {
         const { type, payload } = event.data || {};
-        if (type) {
-          this.handleIncomingPayload(type, payload);
+        if (!type) return;
+
+        // When a viewer requests the live stream from the same browser (cross-tab),
+        // the broadcaster tab responds by posting its local stream info back.
+        // MediaStreams cannot cross BroadcastChannel directly, but we can
+        // signal the viewer to use WebRTC via the peer ID.
+        if (type === 'REQUEST_LIVE_STREAM' && this.localStream && this.localStream.active) {
+          // Re-broadcast LIVE_STREAM_STARTED with updated peerId so viewer can connect
+          this.channel.postMessage({
+            type: 'LIVE_STREAM_STARTED',
+            payload: {
+              peerId: this.peerId,
+              broadcasterPeerId: this.peerId,
+              broadcasterId: this.currentUser?.id,
+              broadcasterName: this.currentUser?.name,
+              broadcasterUsername: this.currentUser?.username,
+              broadcasterAvatar: this.currentUser?.avatar,
+              linkupId: this.currentUser?.linkupId,
+              isLive: true,
+              lastHeartbeat: Date.now(),
+            },
+          });
+          return;
         }
+
+        this.handleIncomingPayload(type, payload);
       };
     } else {
       this.channel = null;
@@ -82,13 +118,45 @@ class RealtimeService {
             if (data && data.message) {
               const parsed = JSON.parse(data.message);
               if (parsed.type && parsed.payload) {
+                // If this is a historical LIVE event older than 45 seconds, IGNORE IT COMPLETELY!
+                const eventAgeMs = data.time ? Date.now() - data.time * 1000 : 0;
+                if (parsed.type === 'LIVE_STREAM_STARTED') {
+                  if (eventAgeMs > 45000) {
+                    return; // Stale stream from past hours/days - never resurrect!
+                  }
+                }
+                if (parsed.type === 'LIVE_STREAM_STOPPED') {
+                  this.handleIncomingPayload(parsed.type, parsed.payload, false);
+                  return;
+                }
+
+                // Drop Ameensab default story from cloud replay
+                if (parsed.type === 'NEW_STORY') {
+                  const s = parsed.payload;
+                  const u = (s?.user?.username || '').toLowerCase();
+                  const n = (s?.user?.name || '').toLowerCase();
+                  const uid = (s?.user?.id || '').toLowerCase();
+                  if (
+                    s?.id === 'story-1788501813453' ||
+                    u.includes('ameensab') ||
+                    n.includes('ameensab') ||
+                    uid === 'google-1788494183669'
+                  ) {
+                    return;
+                  }
+                }
+
+                // Historical playback: tag live events so they never trigger duplicate notifications
+                const taggedPayload =
+                  parsed.type === 'LIVE_STREAM_STARTED'
+                    ? { ...parsed.payload, _isHistorical: true }
+                    : parsed.payload;
                 // Historical playback should only populate cache, not trigger live notifications or duplicate alerts
                 const isLiveAlert =
                   parsed.type !== 'NEW_DIRECT_MESSAGE' &&
-                  parsed.type !== 'UNSEND_DIRECT_MESSAGE' &&
                   parsed.type !== 'NEW_FRIEND_REQUEST' &&
                   parsed.type !== 'FRIEND_REQUEST_ACCEPTED';
-                this.handleIncomingPayload(parsed.type, parsed.payload, isLiveAlert);
+                this.handleIncomingPayload(parsed.type, taggedPayload, isLiveAlert);
               }
             }
           } catch {}
@@ -142,6 +210,7 @@ class RealtimeService {
 
     // 2. Sync Live Streams across all devices
     if (type === 'LIVE_STREAM_STARTED' && payload && payload.broadcasterId) {
+      if (payload._isHistorical) return; // Never add historical replay events to active streams!
       try {
         const activeLives = JSON.parse(localStorage.getItem('linkup_active_live_streams') || '[]');
         const existing = activeLives.find((l) => l.broadcasterId === payload.broadcasterId);
@@ -189,8 +258,15 @@ class RealtimeService {
       this.processedMessageIds.add(faccKey);
     }
 
-    // 4. Persist incoming messages into cloud cache with deduplication
+    // 4. Persist incoming messages into cloud cache with deduplication and unsend filter
     if (type === 'NEW_DIRECT_MESSAGE' && payload) {
+      try {
+        const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+        if (payload.id && unsentList.includes(payload.id)) {
+          return; // Message was unsent! Do not process or cache.
+        }
+      } catch {}
+
       const dedupKey = payload.id || `${payload.senderId || payload.senderUsername}_${payload.timestamp}_${payload.text}`;
       if (this.processedMessageIds.has(dedupKey)) {
         return; // Already processed! Never duplicate emit!
@@ -210,6 +286,84 @@ class RealtimeService {
           }
         } catch {}
       }
+    }
+
+    // 4b. Synchronize unsend events across all devices & storage caches
+    if (type === 'UNSEND_DIRECT_MESSAGE' && payload && payload.messageId) {
+      const unsendId = payload.messageId;
+      try {
+        // 1. Maintain persistent list of unsent message IDs
+        const unsentList = JSON.parse(localStorage.getItem('linkup_unsent_messages') || '[]');
+        if (!unsentList.includes(unsendId)) {
+          unsentList.push(unsendId);
+          localStorage.setItem('linkup_unsent_messages', JSON.stringify(unsentList.slice(-500)));
+        }
+
+        // 2. Remove immediately from cloud messages cache
+        const msgs = JSON.parse(localStorage.getItem('linkup_cloud_messages') || '[]');
+        const filteredMsgs = msgs.filter((m) => m.id !== unsendId);
+        localStorage.setItem('linkup_cloud_messages', JSON.stringify(filteredMsgs));
+
+        // 3. Purge from local persistent conversations cache
+        const convs = JSON.parse(localStorage.getItem('linkup_conversations') || '[]');
+        let convsChanged = false;
+        const updatedConvs = convs.map((c) => {
+          if (c.messages?.some((m) => m.id === unsendId)) {
+            convsChanged = true;
+            const remaining = c.messages.filter((m) => m.id !== unsendId);
+            const last = remaining[remaining.length - 1];
+            return {
+              ...c,
+              lastMessage: last ? last.text : 'Message unsent',
+              time: last ? last.time : 'Just now',
+              messages: remaining,
+            };
+          }
+          return c;
+        });
+        if (convsChanged) {
+          localStorage.setItem('linkup_conversations', JSON.stringify(updatedConvs));
+        }
+      } catch (err) {
+        console.warn('Error handling unsend in cache:', err);
+      }
+
+      // Always emit to active subscribers so UI cleans up immediately
+      this.emit('UNSEND_DIRECT_MESSAGE', payload);
+      return;
+    }
+
+    // 5. Persist incoming stories into cloud cache for cross-device sync
+    if (type === 'NEW_STORY' && payload && payload.id) {
+      const u = (payload.user?.username || '').toLowerCase();
+      const n = (payload.user?.name || '').toLowerCase();
+      const uid = (payload.user?.id || '').toLowerCase();
+      if (
+        payload.id === 'story-1788501813453' ||
+        u.includes('ameensab') ||
+        n.includes('ameensab') ||
+        uid === 'google-1788494183669'
+      ) {
+        return; // Drop Ameensab story
+      }
+      try {
+        const storyKey = `story_seen_${payload.id}`;
+        if (!this.processedMessageIds.has(storyKey)) {
+          this.processedMessageIds.add(storyKey);
+          const cleanStory = {
+            ...payload,
+            isMyStory: false,
+            user: { ...payload.user, isOwner: false },
+          };
+          const cloudStories = JSON.parse(localStorage.getItem('linkup_cloud_stories') || '[]');
+          if (!cloudStories.some((s) => s.id === payload.id)) {
+            cloudStories.unshift(cleanStory);
+            // Keep only last 50 stories in cache
+            localStorage.setItem('linkup_cloud_stories', JSON.stringify(cloudStories.slice(0, 50)));
+          }
+          payload = cleanStory;
+        }
+      } catch {}
     }
 
     if (triggerEmit) {
@@ -539,6 +693,12 @@ class RealtimeService {
   startLiveBroadcast(stream, streamInfo) {
     this.localStream = stream;
 
+    // Expose the live stream globally on this device/tab so viewer on same device
+    // can directly grab the MediaStream without WebRTC negotiation
+    if (typeof window !== 'undefined') {
+      window.__linkup_live_stream__ = stream;
+    }
+
     const resolvedPeerId =
       this.peerId ||
       formatPeerId(streamInfo.linkupId || streamInfo.broadcasterUsername || streamInfo.broadcasterId);
@@ -591,17 +751,42 @@ class RealtimeService {
   }
 
   /**
-   * Join and watch another user's live stream via WebRTC or cloud
+   * Join and watch another user's live stream via WebRTC or local stream
    */
   watchLiveStream(broadcasterPeerId, onStreamCallback) {
     if (!broadcasterPeerId) return null;
 
+    // ── Priority 1: same-device stream (broadcaster is on this same page/tab) ──
+    if (typeof window !== 'undefined' && window.__linkup_live_stream__) {
+      const localStream = window.__linkup_live_stream__;
+      if (localStream && localStream.active) {
+        // Clone the stream so it can be played independently (different volume/mute)
+        try {
+          const cloned = localStream.clone();
+          if (onStreamCallback) onStreamCallback(cloned);
+          return { close: () => {}, on: () => {} }; // Mock call handle
+        } catch (e) {
+          console.warn('Stream clone error, using original:', e);
+          if (onStreamCallback) onStreamCallback(localStream);
+          return { close: () => {}, on: () => {} };
+        }
+      }
+    }
+
+    // ── Priority 2: same-browser cross-tab via BroadcastChannel ──
+    // The stream is not available cross-tab, but trigger the broadcaster
+    // to emit REMOTE_STREAM_RECEIVED so the viewer can receive it
+    if (this.channel) {
+      this.channel.postMessage({ type: 'REQUEST_LIVE_STREAM', payload: { broadcasterPeerId } });
+    }
+
+    // ── Priority 3: WebRTC P2P (same local network) ──
     const executeCall = (peerInstance) => {
       try {
         const receiveStream = this.createReceiveOnlyStream();
         const call = receiveStream
           ? peerInstance.call(broadcasterPeerId, receiveStream)
-          : (peerInstance.call(broadcasterPeerId, null).catch ? null : null);
+          : null;
 
         if (call) {
           call.on('stream', (remoteStream) => {
